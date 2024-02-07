@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "intelliSenseMode": "linux-gcc-x64",
+            "includePath": [
+                "${workspaceFolder}/include/**",
+                "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/include"
+            ],
+            "compilerPath": "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/bin/nvcc",
+            "cStandard": "c17",
+            "cppStandard": "c++20"
+        }
+    ],
+    "version": 4
+}
