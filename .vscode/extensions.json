@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "ms-vscode.cpptools",
+        "twxs.cmake",
+        "nvidia.nsight-vscode-edition",
+        "ms-ceintl.vscode-language-pack-zh-hans"
+    ]
+}

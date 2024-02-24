@@ -1,8 +1,7 @@
-# CPU Codes
-add_subdirectory(cpu)
+add_subdirectory(core)
+add_subdirectory(engine)
+add_subdirectory(infra)
 
-# GPU Codes
-add_subdirectory(gpu)
+add_subdirectory(kernel)
 
-# Target Codes
 add_subdirectory(target)

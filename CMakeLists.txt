@@ -15,11 +15,11 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# C++ and CUDA standard
+# C++ and CUDA standard: C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 
-# CUDA architecture
+# CUDA architecture: sm_70
 set(CMAKE_CUDA_ARCHITECTURES 70)
 # CUDA separable compilation
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
@@ -32,6 +32,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
 # Set Include Directories
 include_directories(include)
 
+# subdirectories
 add_subdirectory(src)
 
 

@@ -1,2 +1,2 @@
-add_executable(main main.cu)
-target_link_libraries(main PUBLIC gpu_graph_mining)
+add_executable(gpu_pattern_matching gpu_pattern_matching.cu)
+target_link_libraries(gpu_pattern_matching PUBLIC gpu_graph_mining)
