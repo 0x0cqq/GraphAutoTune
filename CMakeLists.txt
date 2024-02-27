@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(GraphAutoTune VERSION 1.0
         DESCRIPTION "Graph AutoTune"
-        LANGUAGES CXX CUDA
+        LANGUAGES CUDA CXX
 )
 
 # Build type: Release by default
@@ -29,11 +29,31 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
 
+# disable -Wrestrict
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-restrict")
+
 # Set Include Directories
 include_directories(include)
 
-# subdirectories
-add_subdirectory(src)
+
+# Fetch Catch2 for testing
+message(STATUS "Fetching Catch2...")
+
+Include(FetchContent)
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY git@github.com:catchorg/Catch2.git
+  GIT_TAG        v3.5.2
+)
+FetchContent_MakeAvailable(Catch2)
+message(STATUS "Catch2 source dir: ${catch2_SOURCE_DIR}")
+
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(CTest)
+include(Catch)
+
+add_subdirectory(tests)
+
 
 
 # message the current parameters

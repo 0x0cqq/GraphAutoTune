@@ -5,7 +5,9 @@
             "intelliSenseMode": "linux-gcc-x64",
             "includePath": [
                 "${workspaceFolder}/include/**",
-                "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/include"
+                "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/include",
+                "${workspaceFolder}/build/_deps/catch2-src/src",
+                "${workspaceFolder}/build/_deps/catch2-build/generated-includes"
             ],
             "compilerPath": "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/bin/nvcc",
             "cStandard": "c17",
