@@ -65,7 +65,7 @@ inline __device__ bool linear_search(const VIndex_t u, const VIndex_t* b,
 template <Config config>
 inline __device__ bool search_dispatcher(VIndex_t u, const VIndex_t* b,
                                          VIndex_t nb) {
-    if constexpr (config.vertexSetConfig.setSearchType == Binary) {
+    if constexpr (config.vertex_set_config.set_search_type == Binary) {
         return binary_search(u, b, nb);
     } else {
         return linear_search(u, b, nb);
@@ -139,14 +139,19 @@ __device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
 template <Config config>
 __device__ void ArrayVertexSet<config>::__init(VIndex_t* input_data,
                                                VIndex_t input_size) {
-    _data = input_data, _allocated_size = _size = input_size;
+    static_assert(config.vertex_set_config.vertex_store_type == Array);
+
+    const int lid = threadIdx.x % THREADS_PER_WARP;
+    if (lid == 0) {
+        _data = input_data, _allocated_size = _size = input_size;
+    }
 }
 
 template <Config config>
 __device__ VIndex_t do_intersection_dispatcher(VIndex_t* out, const VIndex_t* a,
                                                const VIndex_t* b, VIndex_t na,
                                                VIndex_t nb) {
-    if constexpr (config.vertexSetConfig.setIntersectionType == Parallel) {
+    if constexpr (config.vertex_set_config.set_intersection_type == Parallel) {
         return do_intersection_parallel<config>(out, a, b, na, nb);
     } else {
         return do_intersection_serial<config>(out, a, b, na, nb);

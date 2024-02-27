@@ -1,0 +1,1 @@
+srun -p V100 --gres=gpu:1 ctest

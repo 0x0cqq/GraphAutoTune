@@ -16,7 +16,7 @@ enum SetSearchType {
 };
 
 struct VertexSetConfig {
-    VertexStoreType vertexStoreType = Array;
-    SetIntersectionType setIntersectionType = Parallel;
-    SetSearchType setSearchType = Binary;
+    VertexStoreType vertex_store_type = Array;
+    SetIntersectionType set_intersection_type = Parallel;
+    SetSearchType set_search_type = Binary;
 };
