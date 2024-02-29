@@ -76,6 +76,11 @@
         "regex": "cpp",
         "__threading_support": "cpp",
         "list": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "variant": "cpp",
+        "codecvt": "cpp",
+        "fstream": "cpp",
+        "future": "cpp",
+        "iomanip": "cpp"
     }
 }

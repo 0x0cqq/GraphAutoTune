@@ -3,9 +3,9 @@
 #include <array>
 #include <concepts>
 
+#include "configs/config.hpp"
 #include "configs/gpu_consts.cuh"
 #include "core/types.hpp"
-#include "implementations/gpu/vertex_set.cuh"
 
 namespace GPU {
 

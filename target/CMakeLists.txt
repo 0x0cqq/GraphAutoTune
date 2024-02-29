@@ -1,0 +1,1 @@
+add_executable(pattern_matching pattern_matching.cu)

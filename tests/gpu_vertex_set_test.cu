@@ -2,15 +2,16 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "configs/config.hpp"
-#include "implementations/gpu/array_vertex_set.cuh"
-#include "implementations/gpu/bitmap_vertex_set.cuh"
+#include "core/vertex_set.cuh"
+#include "implementations/array_vertex_set.cuh"
+#include "implementations/bitmap_vertex_set.cuh"
 #include "utils/cuda_utils.cuh"
 
 constexpr Config array_config{
     .vertex_set_config = {.vertex_store_type = Array}};
 
 template <typename Impl>
-requires GPU::IsGPUVertexSetImpl<Impl>
+requires Core::IsVertexSetImpl<Impl>
 __global__ void kernel(Impl &vset1, Impl &vset2, VIndex_t *data1,
                        VIndex_t *data2, VIndex_t N, VIndex_t &result) {
     vset1.__init(data1, N);
