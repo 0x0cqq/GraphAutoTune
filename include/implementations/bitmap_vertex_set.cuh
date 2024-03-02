@@ -8,6 +8,7 @@
 
 namespace GPU {
 
+// 用 Bitmap 形式存储的节点集合
 template <Config config>
 class BitmapVertexSet {
   private:

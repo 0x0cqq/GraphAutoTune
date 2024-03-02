@@ -5,6 +5,7 @@ namespace cg = cooperative_groups;
 
 #include <atomic>
 
+#include "configs/config.hpp"
 #include "configs/gpu_consts.cuh"
 #include "core/types.hpp"
 #include "core/unordered_vertex_set.cuh"
@@ -13,14 +14,19 @@ namespace cg = cooperative_groups;
 namespace Engine {
 
 // 包括 Ordered Vertex Set 和 Unordered Vertex Set 的信息，有一个指针连往外侧
-template <Core::IsVertexSetImpl OrderedVertexSet>
+template <Config config>
 class StorageUnit {
     Core::UnorderedVertexSet<MAX_DEPTH> subtraction_set;
-    OrderedVertexSet vertex_set;
+
+    if constexpr (true) {
+        using Impl = Config;
+    } else {
+        
+    }
 };
 
 // 第 LEVEL 层的存储。
-template <Core::IsVertexSetImpl Impl>
+template <Config config>
 class LevelStorage {
     // 每一个 BLOCK_SIZE 个 VIndex_t 的存储块。每个 VertexSet 都是按照
     // BLOCK_SIZE 的倍数分配的。

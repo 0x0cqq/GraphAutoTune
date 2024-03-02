@@ -31,7 +31,8 @@ __global__ void kernel(Impl &vset1, Impl &vset2, VIndex_t *data1,
 }
 
 TEST_CASE("Array Vertex Set Test", "[array_vertex_set]") {
-    GPU::ArrayVertexSet<array_config> *s1, *s2;
+    using VertexSet = VertexSetTypeDispatcher<array_config>::type;
+    VertexSet *s1, *s2;
 
     int N = 30;
     VIndex_t *a = new VIndex_t[N], *b = new VIndex_t[N];
@@ -56,8 +57,8 @@ TEST_CASE("Array Vertex Set Test", "[array_vertex_set]") {
         cudaMemcpy(dev_b, b, N * sizeof(VIndex_t), cudaMemcpyHostToDevice));
 
     // allocate array_vertex_set
-    gpuErrchk(cudaMalloc(&s1, sizeof(GPU::ArrayVertexSet<array_config>)));
-    gpuErrchk(cudaMalloc(&s2, sizeof(GPU::ArrayVertexSet<array_config>)));
+    gpuErrchk(cudaMalloc(&s1, sizeof(VertexSet)));
+    gpuErrchk(cudaMalloc(&s2, sizeof(VertexSet)));
 
     // initialize array_vertex_set
 
@@ -84,7 +85,7 @@ constexpr Config bitmap_config{
     .vertex_set_config = {.vertex_store_type = Bitmap}};
 
 TEST_CASE("Bitmap Vertex Set Test", "[Bitmap_vertex_set]") {
-    using VertexSet = GPU::BitmapVertexSet<bitmap_config>;
+    using VertexSet = VertexSetTypeDispatcher<bitmap_config>::type;
     VertexSet *s1, *s2;
 
     constexpr int N = 30;

@@ -5,6 +5,10 @@
 #include "core/types.hpp"
 #include "utils/utils.hpp"
 
+// implementations
+#include "implementations/array_vertex_set.cuh"
+#include "implementations/bitmap_vertex_set.cuh"
+
 namespace Core {
 
 template <typename Impl>
@@ -18,3 +22,17 @@ concept IsVertexSetImpl = requires(Impl t, VIndex_t *data, VIndex_t size) {
 };
 
 }  // namespace Core
+
+template <Config config>
+requires(config.vertex_set_config.vertex_store_type == Array)
+class VertexSetTypeDispatcher<config> {
+  public:
+    using type = GPU::ArrayVertexSet<config>;
+};
+
+template <Config config>
+requires(config.vertex_set_config.vertex_store_type == Bitmap)
+class VertexSetTypeDispatcher<config> {
+  public:
+    using type = GPU::BitmapVertexSet<config>;
+};

@@ -9,6 +9,7 @@
 
 namespace GPU {
 
+// 用数组形式存储的节点集合。
 template <Config config>
 class ArrayVertexSet {
   private:

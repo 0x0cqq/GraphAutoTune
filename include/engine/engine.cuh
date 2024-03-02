@@ -3,6 +3,7 @@
 
 #include "configs/gpu_consts.cuh"
 #include "core/types.hpp"
+#include "core/vertex_set.cuh"
 #include "engine/storage.cuh"
 #include "engine/worker.cuh"
 
@@ -11,18 +12,19 @@ namespace Engine {
 // GPU 上，整个 Device
 struct GPUDeviceContext {};
 
-template <Core::IsVertexSetImpl Impl>
+template <Config config>
 class Executor {
   public:
+    using VertexSetImpl = Core::VertexSetTypeDispatcher<config>::type;
     GPUDeviceContext deviceContext;
-    LevelStorage<Impl> storages[MAX_DEPTH];
+    LevelStorage<VertexSetImpl> storages[MAX_DEPTH];
 
     constexpr static int MAX_DEPTH = 10;
     template <int depth>
     __device__ void extend() {
         extern __shared__ WorkerInfo workerInfos[];
-        const LevelStorage<Impl> &last = storages[depth - 1];
-        LevelStorage<Impl> &current = storages[depth];
+        const LevelStorage<VertexSetImpl> &last = storages[depth - 1];
+        LevelStorage<VertexSetImpl> &current = storages[depth];
         WorkerInfo &workerInfo = workerInfos[depth];
         const int wid = threadIdx.x / THREADS_PER_BLOCK;
         const int lid = threadIdx.x % THREADS_PER_BLOCK;
