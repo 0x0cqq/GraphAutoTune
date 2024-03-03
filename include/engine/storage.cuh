@@ -13,16 +13,13 @@ namespace cg = cooperative_groups;
 
 namespace Engine {
 
-// 包括 Ordered Vertex Set 和 Unordered Vertex Set 的信息，有一个指针连往外侧
+// 包括一个 Ordered Vertex Set 对应的 Unordered Vertex Set
+// 的信息，有一个指针连往外侧
 template <Config config>
 class StorageUnit {
     Core::UnorderedVertexSet<MAX_DEPTH> subtraction_set;
-
-    if constexpr (true) {
-        using Impl = Config;
-    } else {
-        
-    }
+    using VertexSet = VertexSetTypeDispatcher<config>::type;
+    VertexSet vertex_set;
 };
 
 // 第 LEVEL 层的存储。
@@ -39,14 +36,14 @@ class LevelStorage {
     // 本层的存储指针
     VIndex_t* _storage;
     // 本层的 StorageUnit 指针
-    StorageUnit<Impl>* _storage_unit;
+    StorageUnit<config>* _storage_unit;
     // 已经分配出去的块数
     int _allocated_blocks;
     // 已经分配出去的 StorageUnit 数量
     int _allocated_storage_units;
 
     __device__ void init(int level, VIndex_t* storage,
-                         StorageUnit<Impl>* storage_unit) {
+                         StorageUnit<config>* storage_unit) {
         _storage = storage;
         _storage_unit = storage_unit;
         _allocated_blocks = 0;

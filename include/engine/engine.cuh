@@ -15,37 +15,52 @@ struct GPUDeviceContext {};
 template <Config config>
 class Executor {
   public:
-    using VertexSetImpl = Core::VertexSetTypeDispatcher<config>::type;
     GPUDeviceContext deviceContext;
-    LevelStorage<VertexSetImpl> storages[MAX_DEPTH];
+    LevelStorage<config> storages[MAX_DEPTH];
 
     constexpr static int MAX_DEPTH = 10;
     template <int depth>
     __device__ void extend() {
         extern __shared__ WorkerInfo workerInfos[];
-        const LevelStorage<VertexSetImpl> &last = storages[depth - 1];
-        LevelStorage<VertexSetImpl> &current = storages[depth];
+        const LevelStorage<config> &last = storages[depth - 1];
+        LevelStorage<config> &current = storages[depth];
         WorkerInfo &workerInfo = workerInfos[depth];
         const int wid = threadIdx.x / THREADS_PER_BLOCK;
         const int lid = threadIdx.x % THREADS_PER_BLOCK;
         // 在 GPU 上 Extend，每个 Warp 作为一个 Worker.
+
+#ifndef NDEBUG
+        if (wid == 0 && lid == 0) {
+            printf("extend: %d\n", depth);
+        }
+#endif
     }
 
     template <int depth>
-    __device__ void search() {
-        extend<depth>();
-        search<depth + 1>(storages);
-    }
+    __device__ void search();
 
-    template <>
-    __device__ void search<MAX_DEPTH>() {
-        // 递归边界
-    }
-
-    __global__ void perform_search() {
+    __device__ void perform_search() {
         // 先建第一层
         search<1>();
     }
 };
+
+// declare search
+
+template <Config config>
+template <int depth>
+__device__ void Executor<config>::search() {
+    const int wid = threadIdx.x / THREADS_PER_BLOCK;
+    const int lid = threadIdx.x % THREADS_PER_BLOCK;
+#ifndef NDEBUG
+    if (wid == 0 && lid == 0) {
+        printf("search: %d\n", depth);
+    }
+#endif
+    extend<depth>();
+    if constexpr (depth < MAX_DEPTH) {
+        search<depth + 1>();
+    }
+}
 
 }  // namespace Engine
