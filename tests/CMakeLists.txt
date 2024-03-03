@@ -1,8 +1,7 @@
-add_executable(vertex_set_test vertex_set_test.cu)
-target_link_libraries(vertex_set_test PRIVATE Catch2::Catch2WithMain)
-catch_discover_tests(vertex_set_test)
+list(APPEND ELEMENTS "vertex_set" "engine" "schedule")
 
-
-add_executable(engine_test engine_test.cu)
-target_link_libraries(engine_test PRIVATE Catch2::Catch2WithMain)
-catch_discover_tests(engine_test)
+foreach(ELEMENT IN LISTS ELEMENTS)
+    add_executable(test_${ELEMENT} test_${ELEMENT}.cu)
+    target_link_libraries(test_${ELEMENT} PRIVATE Catch2::Catch2WithMain)
+    catch_discover_tests(test_${ELEMENT})
+endforeach()

@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 
+#include "configs/config.hpp"
 #include "configs/gpu_consts.cuh"
 #include "core/graph.cuh"
 #include "core/types.hpp"
@@ -11,7 +12,7 @@
 
 namespace Engine {
 
-// GPU 上，整个 Device
+// GPU 上，整个 Device 所需要的所有的其他的东西，都一起打包进来，例如 Schedule 等
 struct GPUDeviceContext {};
 
 template <Config config>

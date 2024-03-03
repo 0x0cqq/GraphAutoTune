@@ -9,7 +9,35 @@
 
 namespace Core {
 
-class Prefix : public std::vector<VIndex_t> {};
+class Prefix {
+  public:
+    static constexpr int MAX_DEPTH = 10;
+    VIndex_t data[MAX_DEPTH];  // Prefix 的内容
+    int depth;                 // Prefix 拥有的长度
+
+    bool operator==(const Prefix &other) const {
+        if (depth != other.depth) {
+            return false;
+        }
+        for (int i = 0; i < depth; i++) {
+            if (data[i] != other.data[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    bool operator==(const std::vector<VIndex_t> &other) const {
+        if (depth != other.size()) {
+            return false;
+        }
+        for (int i = 0; i < depth; i++) {
+            if (data[i] != other[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
 
 // helper functions
 
@@ -193,6 +221,7 @@ class Schedule {
   public:
     int basic_prefix_num;
     int total_prefix_num;
+    std::vector<Prefix> prefixs;
     IEPInfo iep_info;
 
     int find_father_prefix(std::vector<int> &data) {
@@ -200,6 +229,10 @@ class Schedule {
             return -1;
         }
         int last_num = data[data.size() - 1];
+
+        // const slice the vector
+        std::vector<int> tmp_data(data.begin(), data.end() - 1);
+        int father = find_father_prefix(tmp_data);
     }
 
     Schedule(const Pattern &p) {
