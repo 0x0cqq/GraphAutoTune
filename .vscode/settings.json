@@ -81,6 +81,10 @@
         "codecvt": "cpp",
         "fstream": "cpp",
         "future": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "__bit_reference": "cpp",
+        "__functional_03": "cpp",
+        "filesystem": "cpp",
+        "locale": "cpp"
     }
 }

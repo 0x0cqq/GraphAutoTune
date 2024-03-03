@@ -7,16 +7,6 @@
 
 namespace Infra {
 
-template <typename T>
-concept isGraphBackend = requires(T t, VIndex_t v) {
-    // 图的基本信息
-    { t.v_cnt() } -> std::same_as<VIndex_t>;
-    { t.e_cnt() } -> std::same_as<EIndex_t>;
-    // 获得节点的邻居的信息。
-    { t.get_neigh(v) } -> std::same_as<VIndex_t *>;
-    { t.get_neigh_cnt(v) } -> std::same_as<VIndex_t>;
-};
-
 // 和 GraphSet 里面一样的，最简单的 CSR backend
 template <Config config>
 class GlobalMemoryGraph {

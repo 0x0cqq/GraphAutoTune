@@ -3,7 +3,7 @@
 #include <cassert>
 #include <vector>
 
-#include "core/graph.hpp"
+#include "core/graph.cuh"
 
 // 这里先完全 Borrow GraphSet 的已有代码
 

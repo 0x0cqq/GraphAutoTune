@@ -2,10 +2,12 @@
 #include <array>
 
 #include "configs/gpu_consts.cuh"
+#include "core/graph.cuh"
 #include "core/types.hpp"
 #include "core/vertex_set.cuh"
 #include "engine/storage.cuh"
 #include "engine/worker.cuh"
+#include "infra/graph_backend.cuh"
 
 namespace Engine {
 
@@ -15,6 +17,9 @@ struct GPUDeviceContext {};
 template <Config config>
 class Executor {
   public:
+    using GraphBackend = GraphBackendTypeDispatcher<config>::type;
+
+    GraphBackend graph_backend;
     GPUDeviceContext deviceContext;
     LevelStorage<config> storages[MAX_DEPTH];
 
