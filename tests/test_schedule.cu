@@ -2,7 +2,10 @@
 
 #include "core/schedule.hpp"
 
-TEST_CASE("Schedule Test", "[Schedule test]") {
-    //
-    REQUIRE(1 == 1);
+TEST_CASE("Schedule Test", "[schedule]") {
+    Core::Pattern p{"0110010101101010010101010"};
+
+    Core::Schedule schedule{p};
+
+    schedule.output();
 }

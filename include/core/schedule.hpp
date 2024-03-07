@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <vector>
 
 #include "core/graph.cuh"
@@ -14,6 +15,14 @@ class Prefix {
     static constexpr int MAX_DEPTH = 10;
     VIndex_t data[MAX_DEPTH];  // Prefix 的内容
     int depth;                 // Prefix 拥有的长度
+
+    Prefix(const std::vector<VIndex_t> &_data) {
+        assert(_data.size() <= MAX_DEPTH);
+        depth = _data.size();
+        for (int i = 0; i < depth; i++) {
+            data[i] = _data[i];
+        }
+    }
 
     bool operator==(const Prefix &other) const {
         if (depth != other.depth) {
@@ -53,10 +62,11 @@ Pattern get_permutated_pattern(const std::vector<int> &permutation_order,
     return new_p;
 }
 
+// 每一个点都必须与排在前面的某个节点相连
 bool is_pattern_valid(const Pattern &p) {
-    // every point must connect to some one previous in the
+    // every point(except the first one) must connect to some one previous in the
     // permutation
-    for (int i = 0; i < p.v_cnt(); i++) {
+    for (int i = 1; i < p.v_cnt(); i++) {
         bool has_edge = false;
         for (int j = 0; j < i; j++) {
             if (p.has_edge(i, j)) {
@@ -92,8 +102,6 @@ int get_iep_suffix_num(const Pattern &p) {
 
 // s 是邻接矩阵，但是去重，去掉自环，bit 长度为 n * (n - 1) / 2
 bool is_connected(int s, int n) {
-    // 边数
-    int m = n * (n - 1) / 2;
     // 枚举所有子图
     std::vector<bool> connected(n * n, false);
     // 连接所有的边
@@ -155,23 +163,60 @@ std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
     return graph_cnt;
 };
 
+struct IEPInfo {
+    // len(vertex_ids) = the number of distinct prefixs used in the IEP process
+    std::vector<int> iep_vertex_id;  // vid -> pid: ver_ids[vid] = prefix_id
+    std::vector<int> iep_ans_pos;    // gid -> vid: int -> int, pos[gid] = vid
+    std::vector<int> iep_coef;       // subgroup -> coef: int -> int
+    std::vector<bool> iep_flag;      // subgroup -> flag: int -> bool
+
+    void output() const {
+        for (int vid = 0; vid < iep_vertex_id.size(); vid++) {
+            std::cout << "vid: " << vid << " prefix id: " << iep_vertex_id[vid]
+                      << std::endl;
+        }
+        std::cout << "Subgroup info:" << std::endl;
+
+        std::cout << "gid: ";
+        for (int gid = 0; gid < iep_ans_pos.size(); gid++) {
+            std::cout << gid << "\t";
+        }
+        std::cout << std::endl;
+
+        std::cout << "vid: ";
+        for (int gid = 0; gid < iep_ans_pos.size(); gid++) {
+            std::cout << iep_ans_pos[gid] << "\t";
+        }
+        std::cout << std::endl;
+
+        std::cout << "coef: ";
+        for (int gid = 0; gid < iep_coef.size(); gid++) {
+            std::cout << iep_coef[gid] << "\t";
+        }
+        std::cout << std::endl;
+
+        std::cout << "flag: ";
+        for (int gid = 0; gid < iep_flag.size(); gid++) {
+            std::cout << iep_flag[gid] << "\t";
+        }
+        std::cout << std::endl;
+    }
+};
+
 struct IEPGroup {
     std::vector<std::vector<int>> group;
     int coef;
 };
 
-struct IEPInfo {
-    std::vector<IEPGroup> groups;
-};
-
 struct IEPHelperInfo {
-    int &suffix_num;  // 有多少个点可以参与 IEP
-    std::vector<std::pair<int, int>> &graph_cnt;
+    int suffix_num;  // 有多少个点可以参与 IEP
+    std::vector<std::pair<int, int>>
+        graph_cnt;  // 点数为 k 的连通图，边数为偶数/奇数的数量
+    std::vector<IEPGroup> groups;  // 多个联通块的分割情况和系数
 };
 
 void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
-                    const IEPHelperInfo &helper_info,
-                    IEPInfo &result_iep_info) {
+                    IEPHelperInfo &helper_info) {
     const auto &graph_cnt = helper_info.graph_cnt;
     // 边界
     if (depth == helper_info.suffix_num) {
@@ -200,7 +245,7 @@ void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
             group.push_back(cur);
         }
 
-        result_iep_info.groups.emplace_back(
+        helper_info.groups.emplace_back(
             IEPGroup{group, val.first - val.second});
         return;
     }
@@ -208,80 +253,181 @@ void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
     // 递归
     // 分出来一个新类
     id[depth] = group_cnt;
-    get_iep_groups(depth + 1, id, group_cnt + 1, helper_info, result_iep_info);
+    get_iep_groups(depth + 1, id, group_cnt + 1, helper_info);
 
     // 仍然分到老的类里面去
     for (int i = 0; i < depth; i++) {
         id[depth] = id[i];
-        get_iep_groups(depth + 1, id, group_cnt, helper_info, result_iep_info);
+        get_iep_groups(depth + 1, id, group_cnt, helper_info);
     }
-};
+}
+
+IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
+    int iep_suffix_num = get_iep_suffix_num(p);
+    if (iep_suffix_num <= 1) {
+        // 无法使用
+        return IEPHelperInfo{0, {}, {}};
+    } else {
+        // 可以使用 IEP, 提前计算一些系数的信息
+        IEPHelperInfo helper_info;
+
+        // 单个连通块的情况
+        std::vector<std::pair<int, int>> graph_cnt_by_edges =
+            calculate_graph_cnt(iep_suffix_num);
+
+        std::vector<VIndex_t> id(iep_suffix_num);
+
+        helper_info.suffix_num = iep_suffix_num;
+        helper_info.graph_cnt = graph_cnt_by_edges;
+
+        // 多个连通块的情况
+        get_iep_groups(0, id, 0, helper_info);
+
+        return helper_info;
+    }
+}
 
 class Schedule {
   public:
     int basic_prefix_num;
     int total_prefix_num;
     std::vector<Prefix> prefixs;
+    std::vector<int> prefixs_father;
     IEPInfo iep_info;
 
-    int find_father_prefix(std::vector<int> &data) {
+    int insert_prefix(std::vector<int> &data) {
         if (data.size() == 0) {
             return -1;
         }
-        int last_num = data[data.size() - 1];
 
-        // const slice the vector
-        std::vector<int> tmp_data(data.begin(), data.end() - 1);
-        int father = find_father_prefix(tmp_data);
+        // 自己是否已经出现？
+        int pos =
+            std::find(prefixs.begin(), prefixs.end(), data) - prefixs.begin();
+        if (pos != prefixs.size()) {
+            return pos;
+        }
+
+        // 否则，剪掉最后一个点，然后插入
+        std::vector<int> tmp_data{data.begin(), data.end() - 1};
+        int father = insert_prefix(tmp_data);
+
+        // 插入新的点
+        prefixs.emplace_back(data);
+        prefixs_father.push_back(father);
+        return prefixs.size() - 1;
+    }
+
+    void calculate_pattern(const Pattern &p) {
+        // 正式计算
+        // 存在一些没有爹的点，这是不合法的，会导致答案非常多
+        if (!is_pattern_valid(p)) {
+#ifndef NDEBUG
+            std::cerr << "Invalid pattern" << std::endl;
+#endif
+            return;
+        }
+
+        // IEP 优化的辅助信息
+        IEPHelperInfo helper_info = generate_iep_helper_info(p);
+
+        // 构建主 Schedule
+
+        // 构建 basic_prefix，也就是不考虑 iep 情况下的 prefix。
+        for (int i = 0; i < p.v_cnt(); i++) {
+            std::vector<int> tmp_data;
+            for (int j = 0; j < i; j++) {
+                if (p.has_edge(i, j)) {
+                    tmp_data.push_back(j);
+                }
+            }
+            int prefix_id = insert_prefix(tmp_data);
+            // what to do with prefix id?
+        }
+
+        basic_prefix_num = prefixs.size();
+
+        // 构建 iep_prefix
+
+        for (int rank = 0; rank < helper_info.suffix_num; rank++) {
+            const auto &group = helper_info.groups[rank].group;
+            const auto &coef = helper_info.groups[rank].coef;
+
+            const VIndex_t suffix_base = p.v_cnt() - helper_info.suffix_num;
+
+            for (const auto &sub_group : group) {
+                std::vector<int> tmp_data;
+                for (int i = 0; i < suffix_base; i++) {
+                    for (int j = 0; j < sub_group.size(); j++) {
+                        if (p.has_edge(i, suffix_base + sub_group[j])) {
+                            tmp_data.push_back(i);
+                            break;
+                        }
+                    }
+                }
+
+                // 这个 iep 的“subgroup”需要的前缀
+                int prefix_id = insert_prefix(tmp_data);
+                // vertex_ids[vid] = prefix_id
+                // ans[vid] = vertex_set[vertex_ids[vid]].size()
+                int vid = std::find(iep_info.iep_vertex_id.begin(),
+                                    iep_info.iep_vertex_id.end(), prefix_id) -
+                          iep_info.iep_vertex_id.begin();
+                if (vid == iep_info.iep_vertex_id.size()) {
+                    iep_info.iep_vertex_id.push_back(prefix_id);
+                    // vid 不变
+                }
+                iep_info.iep_ans_pos.push_back(vid);
+
+                // 最后一个 group
+                if (rank == helper_info.suffix_num - 1) {
+                    iep_info.iep_coef.push_back(coef);
+                    iep_info.iep_coef.push_back(true);
+                } else {
+                    iep_info.iep_coef.push_back(0);
+                    iep_info.iep_flag.push_back(false);
+                }
+            }
+        }
+
+        total_prefix_num = prefixs.size();
+
+        // 处理 next ？
+
+        // 如果没有 child，就只需要 size
+
+        // 增加限制
+        // 目前的限制生成是非常愚蠢的，需要有 matching 的算法才能生成
+
+        // 计算 cost
+
+        // 根据 cost 更新 best val
+    }
+
+    void output() const {
+        std::cout << "IEP_INFO: " << std::endl;
+        iep_info.output();
     }
 
     Schedule(const Pattern &p) {
-        std::vector<int> permutation_order;
+        // 只用当前的顺序，不枚举 permutation
+        calculate_pattern(p);
 
-        // best ones
-        std::vector<int> best_permutation;
-        double best_val;
+        // 最好的 permutation 以及对应的 cost 评估值
+        // std::vector<int> best_permutation;
+        // double best_cost;
 
-        for (int i = 0; i < p.v_cnt(); i++) {
-            permutation_order.push_back(i);
-        }
-        do {  // 枚举所有的排列
+        // std::vector<int> permutation_order;
+        // for (int i = 0; i < p.v_cnt(); i++) {
+        //     permutation_order.push_back(i);
+        // }
 
-            // 正式计算
-            Pattern new_p = get_permutated_pattern(permutation_order, p);
+        // do {  // 枚举所有的排列
+        //     Pattern new_p = get_permutated_pattern(permutation_order, p);
 
-            // 存在一些没有爹的点，这是不合法的
-            if (!is_pattern_valid(new_p)) {
-                continue;
-            }
+        //     calculate_pattern(new_p);
 
-            // IEP 优化
-            int iep_suffix_num = get_iep_suffix_num(new_p);
-            if (iep_suffix_num <= 1) {
-                // 无法使用 IEP
-            } else {
-                // 可以使用 IEP
-                // 单个连通块的情况
-                std::vector<std::pair<int, int>> graph_cnt_by_edges =
-                    calculate_graph_cnt(iep_suffix_num);
-
-                std::vector<VIndex_t> id(iep_suffix_num);
-
-                const IEPHelperInfo helper_info{iep_suffix_num,
-                                                graph_cnt_by_edges};
-
-                this->iep_info.groups.clear();
-
-                get_iep_groups(0, id, 0, helper_info, this->iep_info);
-            }
-
-            // 构建主 Schedule
-
-            // 构建 basic_prefix，也就是不考虑 iep 情况下的 prefix。
-            std::vector<int> tmp_data;
-
-        } while (std::next_permutation(permutation_order.begin(),
-                                       permutation_order.end()));
+        // } while (std::next_permutation(permutation_order.begin(),
+        //                                permutation_order.end()));
     }
 };
 }  // namespace Core
