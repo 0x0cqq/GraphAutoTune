@@ -46,6 +46,14 @@ class Prefix {
         }
         return true;
     }
+
+    void output() const {
+        std::cout << "Prefix: ";
+        for (int i = 0; i < depth; i++) {
+            std::cout << data[i] << " ";
+        }
+        std::cout << std::endl;
+    }
 };
 
 // helper functions
@@ -64,8 +72,8 @@ Pattern get_permutated_pattern(const std::vector<int> &permutation_order,
 
 // 每一个点都必须与排在前面的某个节点相连
 bool is_pattern_valid(const Pattern &p) {
-    // every point(except the first one) must connect to some one previous in the
-    // permutation
+    // every point(except the first one) must connect to some one previous in
+    // the permutation
     for (int i = 1; i < p.v_cnt(); i++) {
         bool has_edge = false;
         for (int j = 0; j < i; j++) {
@@ -87,8 +95,8 @@ int get_iep_suffix_num(const Pattern &p) {
     for (int k = 2; k <= p.v_cnt() - 2; k++) {
         int new_point = p.v_cnt() - k;
         bool has_edge = false;
-        for (int index = new_point + 1; index < p.v_cnt(); new_point++) {
-            if (!p.has_edge(new_point, index)) {
+        for (int index = new_point + 1; index < p.v_cnt(); index++) {
+            if (p.has_edge(new_point, index)) {
                 has_edge = true;
                 break;
             }
@@ -177,25 +185,25 @@ struct IEPInfo {
         }
         std::cout << "Subgroup info:" << std::endl;
 
-        std::cout << "gid: ";
+        std::cout << "\tgid: \t";
         for (int gid = 0; gid < iep_ans_pos.size(); gid++) {
             std::cout << gid << "\t";
         }
         std::cout << std::endl;
 
-        std::cout << "vid: ";
+        std::cout << "\tvid: \t";
         for (int gid = 0; gid < iep_ans_pos.size(); gid++) {
             std::cout << iep_ans_pos[gid] << "\t";
         }
         std::cout << std::endl;
 
-        std::cout << "coef: ";
+        std::cout << "\tcoef:\t";
         for (int gid = 0; gid < iep_coef.size(); gid++) {
             std::cout << iep_coef[gid] << "\t";
         }
         std::cout << std::endl;
 
-        std::cout << "flag: ";
+        std::cout << "\tflag:\t";
         for (int gid = 0; gid < iep_flag.size(); gid++) {
             std::cout << iep_flag[gid] << "\t";
         }
@@ -206,26 +214,48 @@ struct IEPInfo {
 struct IEPGroup {
     std::vector<std::vector<int>> group;
     int coef;
+
+    void output(bool show_title = false) const {
+        if (show_title) {
+            std::cout << "IEPGroup: " << std::endl;
+        }
+        std::cout << "\tcoef: " << coef << std::endl;
+        std::cout << "\telem: ";
+        for (const auto &sub_group : group) {
+            for (const auto &v : sub_group) {
+                std::cout << v << " ";
+            }
+            std::cout << "| ";
+        }
+        std::cout << std::endl;
+    }
 };
 
 struct IEPHelperInfo {
-    int suffix_num;  // 有多少个点可以参与 IEP
-    std::vector<std::pair<int, int>>
-        graph_cnt;  // 点数为 k 的连通图，边数为偶数/奇数的数量
+    int suffix_num;                // 有多少个点可以参与 IEP
     std::vector<IEPGroup> groups;  // 多个联通块的分割情况和系数
+
+    void output() const {
+        std::cout << "IEPHelperInfo: " << std::endl;
+        std::cout << "suffix_num: " << suffix_num << std::endl;
+        std::cout << "groups: " << std::endl;
+        for (const auto &group : groups) {
+            group.output();
+        }
+    }
 };
 
 void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
-                    IEPHelperInfo &helper_info) {
-    const auto &graph_cnt = helper_info.graph_cnt;
+                    int suffix_num, std::vector<IEPGroup> &groups,
+                    const std::vector<std::pair<int, int>> &graph_cnt) {
     // 边界
-    if (depth == helper_info.suffix_num) {
+    if (depth == suffix_num) {
         std::vector<int> group_size(group_cnt, 0);
         for (auto g_id : id) {
             group_size[g_id]++;
         }
-        std::pair<int, int> val{graph_cnt[0]};
-        for (int i = 1; i < group_cnt; i++) {
+        std::pair<int, int> val{1, 0};
+        for (int i = 0; i < group_cnt; i++) {
             int group_sz = group_size[i];
             int new_first =
                 val.first * graph_cnt[group_sz].first +
@@ -239,26 +269,25 @@ void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
         std::vector<std::vector<int>> group{};
         for (int group_id = 0; group_id < group_cnt; group_id++) {
             std::vector<int> cur;
-            for (int v_id = 0; v_id < helper_info.suffix_num; v_id++) {
+            for (int v_id = 0; v_id < suffix_num; v_id++) {
                 if (id[v_id] == group_id) cur.push_back(v_id);
             }
             group.push_back(cur);
         }
 
-        helper_info.groups.emplace_back(
-            IEPGroup{group, val.first - val.second});
+        groups.emplace_back(IEPGroup{group, val.first - val.second});
         return;
     }
 
     // 递归
     // 分出来一个新类
     id[depth] = group_cnt;
-    get_iep_groups(depth + 1, id, group_cnt + 1, helper_info);
+    get_iep_groups(depth + 1, id, group_cnt + 1, suffix_num, groups, graph_cnt);
 
     // 仍然分到老的类里面去
-    for (int i = 0; i < depth; i++) {
-        id[depth] = id[i];
-        get_iep_groups(depth + 1, id, group_cnt, helper_info);
+    for (int i = 0; i < group_cnt; i++) {
+        id[depth] = i;
+        get_iep_groups(depth + 1, id, group_cnt, suffix_num, groups, graph_cnt);
     }
 }
 
@@ -266,10 +295,9 @@ IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
     int iep_suffix_num = get_iep_suffix_num(p);
     if (iep_suffix_num <= 1) {
         // 无法使用
-        return IEPHelperInfo{0, {}, {}};
+        return IEPHelperInfo{0, {}};
     } else {
         // 可以使用 IEP, 提前计算一些系数的信息
-        IEPHelperInfo helper_info;
 
         // 单个连通块的情况
         std::vector<std::pair<int, int>> graph_cnt_by_edges =
@@ -277,13 +305,12 @@ IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
 
         std::vector<VIndex_t> id(iep_suffix_num);
 
-        helper_info.suffix_num = iep_suffix_num;
-        helper_info.graph_cnt = graph_cnt_by_edges;
+        std::vector<IEPGroup> groups;
 
         // 多个连通块的情况
-        get_iep_groups(0, id, 0, helper_info);
+        get_iep_groups(0, id, 0, iep_suffix_num, groups, graph_cnt_by_edges);
 
-        return helper_info;
+        return IEPHelperInfo{iep_suffix_num, groups};
     }
 }
 
@@ -295,6 +322,7 @@ class Schedule {
     std::vector<int> prefixs_father;
     IEPInfo iep_info;
 
+    // 将一个新的依赖集合插入前缀。
     int insert_prefix(std::vector<int> &data) {
         if (data.size() == 0) {
             return -1;
@@ -329,6 +357,7 @@ class Schedule {
 
         // IEP 优化的辅助信息
         IEPHelperInfo helper_info = generate_iep_helper_info(p);
+        helper_info.output();
 
         // 构建主 Schedule
 
@@ -348,13 +377,14 @@ class Schedule {
 
         // 构建 iep_prefix
 
-        for (int rank = 0; rank < helper_info.suffix_num; rank++) {
+        for (int rank = 0; rank < helper_info.groups.size(); rank++) {
             const auto &group = helper_info.groups[rank].group;
             const auto &coef = helper_info.groups[rank].coef;
 
             const VIndex_t suffix_base = p.v_cnt() - helper_info.suffix_num;
 
-            for (const auto &sub_group : group) {
+            for (int sg_id = 0; sg_id < group.size(); sg_id++) {
+                const auto &sub_group = group[sg_id];
                 std::vector<int> tmp_data;
                 for (int i = 0; i < suffix_base; i++) {
                     for (int j = 0; j < sub_group.size(); j++) {
@@ -378,10 +408,11 @@ class Schedule {
                 }
                 iep_info.iep_ans_pos.push_back(vid);
 
-                // 最后一个 group
-                if (rank == helper_info.suffix_num - 1) {
+                // 最后一个 subgroup: 结算！
+
+                if (sg_id == group.size() - 1) {
                     iep_info.iep_coef.push_back(coef);
-                    iep_info.iep_coef.push_back(true);
+                    iep_info.iep_flag.push_back(true);
                 } else {
                     iep_info.iep_coef.push_back(0);
                     iep_info.iep_flag.push_back(false);
@@ -404,6 +435,11 @@ class Schedule {
     }
 
     void output() const {
+        std::cout << "PREFIXS:" << std::endl;
+        for (const auto &prefix : prefixs) {
+            std::cout << "\t";
+            prefix.output();
+        }
         std::cout << "IEP_INFO: " << std::endl;
         iep_info.output();
     }
