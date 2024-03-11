@@ -1,4 +1,4 @@
-list(APPEND ELEMENTS "vertex_set" "engine" "schedule")
+list(APPEND ELEMENTS "vertex_set" "engine" "schedule" "graph")
 
 foreach(ELEMENT IN LISTS ELEMENTS)
     add_executable(test_${ELEMENT} test_${ELEMENT}.cu)

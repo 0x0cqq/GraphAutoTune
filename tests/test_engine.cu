@@ -5,7 +5,7 @@
 #include "engine/engine.cuh"
 #include "utils/cuda_utils.cuh"
 
-constexpr Config default_config;
+constexpr Config default_config{};
 
 __global__ void test_engine(Engine::Executor<default_config> *engine) {
     engine->perform_search();

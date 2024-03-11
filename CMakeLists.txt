@@ -56,6 +56,8 @@ include(Catch)
 add_subdirectory(target)
 # Tests
 add_subdirectory(tests)
+# Utils: transform graph e.g.
+add_subdirectory(utils)
 
 
 # message the current parameters

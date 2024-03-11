@@ -1,0 +1,1 @@
+add_executable(graph_transform graph_transform.cu)

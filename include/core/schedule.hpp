@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/graph.cuh"
+#include "core/pattern.hpp"
 
 // 这里先完全 Borrow GraphSet 的已有代码
 
@@ -28,23 +29,13 @@ class Prefix {
         if (depth != other.depth) {
             return false;
         }
-        for (int i = 0; i < depth; i++) {
-            if (data[i] != other.data[i]) {
-                return false;
-            }
-        }
-        return true;
+        return std::equal(data, data + depth, other.data);
     }
     bool operator==(const std::vector<VIndex_t> &other) const {
         if (depth != other.size()) {
             return false;
         }
-        for (int i = 0; i < depth; i++) {
-            if (data[i] != other[i]) {
-                return false;
-            }
-        }
-        return true;
+        return std::equal(data, data + depth, other.begin());
     }
 
     void output() const {
@@ -54,39 +45,6 @@ class Prefix {
         }
         std::cout << std::endl;
     }
-};
-
-// helper functions
-
-Pattern get_permutated_pattern(const std::vector<int> &permutation_order,
-                               const Pattern &p) {
-    Pattern new_p{p.v_cnt()};
-    for (int i = 0; i < p.v_cnt(); i++) {
-        for (int j = 0; j < p.v_cnt(); j++) {
-            if (p.has_edge(i, j))
-                new_p.add_edge(permutation_order[i], permutation_order[j]);
-        }
-    }
-    return new_p;
-}
-
-// 每一个点都必须与排在前面的某个节点相连
-bool is_pattern_valid(const Pattern &p) {
-    // every point(except the first one) must connect to some one previous in
-    // the permutation
-    for (int i = 1; i < p.v_cnt(); i++) {
-        bool has_edge = false;
-        for (int j = 0; j < i; j++) {
-            if (p.has_edge(i, j)) {
-                has_edge = true;
-                break;
-            }
-        }
-        if (!has_edge) {
-            return false;
-        }
-    }
-    return true;
 };
 
 int get_iep_suffix_num(const Pattern &p) {
@@ -231,6 +189,29 @@ struct IEPGroup {
     }
 };
 
+// 获取所有让 p 的自同构的 permutation
+std::vector<std::vector<int>> get_isomorphism_permutations(const Pattern &p) {
+    std::vector<std::vector<int>> ans{};
+    std::vector<int> perm{};
+    for (int i = 0; i < p.v_cnt(); i++) {
+        perm.push_back(i);
+    }
+    // 枚举所有的 permutation
+    do {
+        Pattern permutated_p = get_permutated_pattern(perm, p);
+        if (permutated_p == p) {
+            ans.push_back(perm);
+        }
+    } while (std::next_permutation(perm.begin(), perm.end()));
+    return ans;
+}
+
+int get_isomorphism_multiplicity(const Pattern &p) {
+    std::vector<std::vector<int>> isomorphism_permutations =
+        get_isomorphism_permutations(p);
+    return isomorphism_permutations.size();
+}
+
 struct IEPHelperInfo {
     int suffix_num;                // 有多少个点可以参与 IEP
     std::vector<IEPGroup> groups;  // 多个联通块的分割情况和系数
@@ -321,6 +302,8 @@ class Schedule {
     std::vector<Prefix> prefixs;
     std::vector<int> prefixs_father;
     IEPInfo iep_info;
+
+    // restrictions
 
     // 将一个新的依赖集合插入前缀。
     int insert_prefix(std::vector<int> &data) {
