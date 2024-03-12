@@ -17,14 +17,17 @@ namespace Engine {
 // 的信息，有一个指针连往外侧
 template <Config config>
 class StorageUnit {
+  public:
     Core::UnorderedVertexSet<MAX_DEPTH> subtraction_set;
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     VertexSet vertex_set;
+    static_assert(Core::IsVertexSetImpl<VertexSet>);
 };
 
 // 第 LEVEL 层的存储。
 template <Config config>
 class LevelStorage {
+  private:
     // 每一个 BLOCK_SIZE 个 VIndex_t 的存储块。每个 VertexSet 都是按照
     // BLOCK_SIZE 的倍数分配的。
     static constexpr int BLOCK_SIZE = 4000;
@@ -34,26 +37,43 @@ class LevelStorage {
     // level
     int _level;
     // 本层的存储指针
-    VIndex_t* _storage;
+    VIndex_t _storage[TOTAL_SIZE];
     // 本层的 StorageUnit 指针
-    StorageUnit<config>* _storage_unit;
+    StorageUnit<config> _storage_unit[NUM_BLOCKS];
     // 已经分配出去的块数
     int _allocated_blocks;
     // 已经分配出去的 StorageUnit 数量
     int _allocated_storage_units;
 
-    __device__ void init(int level, VIndex_t* storage,
-                         StorageUnit<config>* storage_unit) {
-        _storage = storage;
-        _storage_unit = storage_unit;
+    // 本层已经 extend 的 vertex 位置
+    int _cur_storage_unit;  // 当前在处理 Vertex Set 的 index
+    int _cur_vertex_index;  // 当前在处理 vertex 在 Set 中的 index
+
+  public:
+    __device__ bool extend_finished() const {
+        return _cur_storage_unit == _allocated_storage_units - 1 &&
+               _cur_vertex_index ==
+                   _storage_unit[_cur_storage_unit].vertex_set.size();
+    }
+
+    __device__ int cur_storage_unit() const { return _cur_storage_unit; }
+
+    __device__ int cur_vertex_index() const { return _cur_vertex_index; }
+
+    __device__ void init(int level) {
         _allocated_blocks = 0;
         _allocated_storage_units = 0;
         _level = level;
+        _cur_storage_unit = 0;
+        _cur_vertex_index = 0;
     }
 
+    // 形式上清空该层的存储
     __device__ void clear() {
         _allocated_blocks = 0;
         _allocated_storage_units = 0;
+        _cur_storage_unit = 0;
+        _cur_vertex_index = 0;
     }
 
     // 注意：每个 Worker 只有一个线程调用这个函数

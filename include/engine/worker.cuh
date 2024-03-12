@@ -6,9 +6,13 @@
 namespace Engine {
 
 // 这个是 Per Worker 的信息
+// 在 GPU 上就会放到
 class WorkerInfo {
-    VIndex_t current_vertex;
-    std::pair<VIndex_t, VIndex_t> current_progress;
+  public:
+    unsigned long long local_answer;
+    void clear() {
+        local_answer = 0;
+    }
 };
 
 }  // namespace Engine

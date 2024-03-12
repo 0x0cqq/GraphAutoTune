@@ -18,17 +18,17 @@ class ArrayVertexSet {
     VIndex_t* _data;
 
   public:
-    __device__ void __init(VIndex_t* input_data, VIndex_t input_size);
+    __device__ void init(VIndex_t* input_data, VIndex_t input_size);
 
-    __device__ VIndex_t __size() const { return _size; }
+    __device__ VIndex_t size() const { return _size; }
 
-    __device__ VIndex_t* __data() const { return _data; }
+    __device__ VIndex_t* data() const { return _data; }
 
-    __device__ void __clear() { _size = 0; }
+    __device__ void clear() { _size = 0; }
 
-    __device__ size_t __storage_space() const { return _allocated_size; }
+    __device__ size_t storage_space() const { return _allocated_size; }
 
-    __device__ void __intersect(const ArrayVertexSet<config>& b);
+    __device__ void intersect(const ArrayVertexSet<config>& b);
 };
 
 }  // namespace GPU
@@ -138,8 +138,8 @@ __device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
 }
 
 template <Config config>
-__device__ void ArrayVertexSet<config>::__init(VIndex_t* input_data,
-                                               VIndex_t input_size) {
+__device__ void ArrayVertexSet<config>::init(VIndex_t* input_data,
+                                             VIndex_t input_size) {
     static_assert(config.vertex_set_config.vertex_store_type == Array);
 
     const int lid = threadIdx.x % THREADS_PER_WARP;
@@ -160,10 +160,10 @@ __device__ VIndex_t do_intersection_dispatcher(VIndex_t* out, const VIndex_t* a,
 }
 
 template <Config config>
-__device__ void ArrayVertexSet<config>::__intersect(
+__device__ void ArrayVertexSet<config>::intersect(
     const ArrayVertexSet<config>& b) {
-    _size = do_intersection_dispatcher<config>(__data(), __data(), b.__data(),
-                                               __size(), b.__size());
+    _size = do_intersection_dispatcher<config>(data(), data(), b.data(), size(),
+                                               b.size());
 }
 
 }  // namespace GPU

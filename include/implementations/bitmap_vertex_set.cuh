@@ -17,20 +17,20 @@ class BitmapVertexSet {
     VIndex_t _non_zero_cnt;
 
   public:
-    __device__ void __clear() {
+    __device__ void clear() {
         _non_zero_cnt = 0;
         memset(_data, 0, _storage_space * sizeof(VIndex_t));
     }
 
-    __device__ void __init(VIndex_t *input_data, VIndex_t input_size);
+    __device__ void init(VIndex_t *input_data, VIndex_t input_size);
 
-    __device__ VIndex_t *__data() const { return _data; }
+    __device__ VIndex_t *data() const { return _data; }
 
-    __device__ size_t __storage_space() { return _storage_space; }
+    __device__ size_t storage_space() { return _storage_space; }
 
-    __device__ VIndex_t __size() { return _non_zero_cnt; }
+    __device__ VIndex_t size() { return _non_zero_cnt; }
 
-    __device__ void __intersect(const BitmapVertexSet &b);
+    __device__ void intersect(const BitmapVertexSet &b);
 };
 
 }  // namespace GPU
@@ -74,8 +74,8 @@ __device__ uint32_t calculate_non_zero_cnt(VIndex_t *data, size_t size) {
 }
 
 template <Config config>
-__device__ void BitmapVertexSet<config>::__init(VIndex_t *input_data,
-                                                VIndex_t input_size) {
+__device__ void BitmapVertexSet<config>::init(VIndex_t *input_data,
+                                              VIndex_t input_size) {
     static_assert(config.vertex_set_config.vertex_store_type == Bitmap);
     // 输入的就是一个 vertex set。
     const int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
@@ -89,7 +89,7 @@ __device__ void BitmapVertexSet<config>::__init(VIndex_t *input_data,
 };
 
 template <Config config>
-__device__ void BitmapVertexSet<config>::__intersect(const BitmapVertexSet &b) {
+__device__ void BitmapVertexSet<config>::intersect(const BitmapVertexSet &b) {
     const int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
     const int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
     for (int index = 0; index < _storage_space; index += THREADS_PER_WARP) {

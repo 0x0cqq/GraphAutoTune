@@ -13,12 +13,12 @@ namespace Core {
 
 template <typename Impl>
 concept IsVertexSetImpl = requires(Impl t, VIndex_t *data, VIndex_t size) {
-    { t.__init(data, size) } -> std::same_as<void>;
-    { t.__size() } -> std::same_as<VIndex_t>;
-    { t.__data() } -> std::same_as<VIndex_t *>;
-    { t.__storage_space() } -> std::same_as<size_t>;
-    { t.__clear() } -> std::same_as<void>;
-    { t.__intersect(t) } -> std::same_as<void>;
+    { t.init(data, size) } -> std::same_as<void>;
+    { t.size() } -> std::same_as<VIndex_t>;
+    { t.data() } -> std::same_as<VIndex_t *>;
+    { t.storage_space() } -> std::same_as<size_t>;
+    { t.clear() } -> std::same_as<void>;
+    { t.intersect(t) } -> std::same_as<void>;
 };
 
 }  // namespace Core

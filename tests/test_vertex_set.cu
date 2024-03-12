@@ -14,19 +14,19 @@ template <typename Impl>
 requires Core::IsVertexSetImpl<Impl>
 __global__ void kernel(Impl &vset1, Impl &vset2, VIndex_t *data1,
                        VIndex_t *data2, VIndex_t N, VIndex_t &result) {
-    vset1.__init(data1, N);
-    vset2.__init(data2, N);
+    vset1.init(data1, N);
+    vset2.init(data2, N);
 
     __syncthreads();
     __threadfence_block();
 
-    vset1.__intersect(vset2);
+    vset1.intersect(vset2);
     __syncthreads();
     __threadfence_block();
 
     if (threadIdx.x == 0) {
-        printf("Intersection: %d\n", vset1.__size());
-        result = vset1.__size();
+        printf("Intersection: %d\n", vset1.size());
+        result = vset1.size();
     }
 }
 
