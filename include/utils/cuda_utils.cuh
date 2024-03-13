@@ -40,3 +40,10 @@ int get_device_information(bool print = false) {
     }
     return nDevices;
 }
+
+void print_device_memory() {
+    size_t free, total;
+    gpuErrchk(cudaMemGetInfo(&free, &total));
+    int used = int(double(total - free) / (1024 * 1024));
+    std::cout << "Used memory: " << used << " MB\n";
+}

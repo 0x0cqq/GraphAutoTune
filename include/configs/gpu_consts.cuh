@@ -9,3 +9,9 @@ constexpr int num_total_warps = num_blocks * WARPS_PER_BLOCK;
 
 // temporary
 constexpr int MAX_DEPTH = 10;
+
+enum DeviceType {
+    CPU_DEVICE,
+    GPU_DEVICE,
+    UNKNOWN_DEVICE,
+};

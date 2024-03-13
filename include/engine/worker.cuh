@@ -10,9 +10,7 @@ namespace Engine {
 class WorkerInfo {
   public:
     unsigned long long local_answer;
-    void clear() {
-        local_answer = 0;
-    }
+    __host__ __device__ void clear() { local_answer = 0; }
 };
 
 }  // namespace Engine

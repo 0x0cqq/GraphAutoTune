@@ -9,44 +9,62 @@
 #include "core/vertex_set.cuh"
 #include "engine/storage.cuh"
 #include "engine/worker.cuh"
-#include "infra/graph_backend.cuh"
 
 namespace Engine {
 
 // GPU 上，整个 Device 所需要的所有的其他的东西，都一起打包进来，例如 Schedule
-// 等
-struct GPUDeviceContext {
+// 等。这里面的变量应当是不会改变的，我们将会将其整体放进 constant memory 中。
+
+template <Config config>
+struct DeviceContext {
+    using GraphBackend = GraphBackendTypeDispatcher<config>::type;
+    // 图挖掘的 Schedule
     Core::Schedule schedule;
-    unsigned long long answer;
+    // 提供图数据访问的后端
+    GraphBackend graph_backend;
+
+    __host__ DeviceContext(const Core::Schedule &_schedule,
+                           const GraphBackend &_graph_backend)
+        : schedule(_schedule), graph_backend(_graph_backend) {}
+
+    __host__ void to_device() {
+        schedule.to_device();
+        graph_backend.to_device();
+    }
 };
 
 template <Config config>
 class Executor {
   private:
-    constexpr static int MAX_DEPTH = 10;
-    using GraphBackend = GraphBackendTypeDispatcher<config>::type;
-
-    // 提供图数据访问的后端
-    GraphBackend graph_backend;
-    // 其他需要传递进来的指针等
-    GPUDeviceContext device_context;
     // 搜索过程中每层所需要的临时存储
-    LevelStorage<config> storages[MAX_DEPTH];
+    LevelStorage<config> *storages;
 
     // 扩展
     template <int depth>
-    __device__ void extend();
+    __device__ void extend(const DeviceContext<config> &context);
 
     // 搜索
     template <int depth>
-    __device__ void search();
+    __device__ void search(const DeviceContext<config> &context);
 
     // 结算答案
-    __device__ void final_step();
+    __device__ void final_step(const DeviceContext<config> &context);
 
   public:
-    // 没有模板的搜索函数。用于外部调用
-    __device__ void perform_search() {
+    __host__ Executor(DeviceType device_type) {
+        if (device_type == DeviceType::GPU_DEVICE) {
+            gpuErrchk(cudaMalloc(&storages,
+                                 sizeof(LevelStorage<config>) * MAX_DEPTH));
+        } else if (device_type == DeviceType::CPU_DEVICE) {
+            storages = new LevelStorage<config>[MAX_DEPTH];
+        } else {
+            assert(false);
+        }
+    }
+
+    // 没有模板的搜索函数。用于外部 global kernel 调用
+    __device__ void perform_search(unsigned long long *ans,
+                                   const DeviceContext<config> &context) {
         extern __shared__ WorkerInfo workerInfos[];
         const int wid = threadIdx.x / THREADS_PER_WARP;
         const int lid = threadIdx.x % THREADS_PER_WARP;
@@ -57,11 +75,11 @@ class Executor {
         }
 
         // 从第 0 个 prefix 开始搜索
-        search<0>();
+        search<0>(context);
 
         // 归结到设备的答案上
         if (lid == 0) {
-            atomicAdd(&device_context.answer, workerInfos[wid].local_answer);
+            atomicAdd(ans, workerInfos[wid].local_answer);
         }
     }
 };
@@ -69,7 +87,7 @@ class Executor {
 // declare search
 template <Config config>
 template <int depth>
-__device__ void Executor<config>::extend() {
+__device__ void Executor<config>::extend(const DeviceContext<config> &context) {
     extern __shared__ WorkerInfo workerInfos[];
     const LevelStorage<config> &last = storages[depth - 1];
     LevelStorage<config> &current = storages[depth];
@@ -104,7 +122,8 @@ __device__ void Executor<config>::extend() {
 }
 
 template <Config config>
-__device__ void Executor<config>::final_step() {
+__device__ void Executor<config>::final_step(
+    const DeviceContext<config> &context) {
     extern __shared__ WorkerInfo workerInfos[];
     const int wid = threadIdx.x / THREADS_PER_WARP;
     const int lid = threadIdx.x % THREADS_PER_WARP;
@@ -116,7 +135,7 @@ __device__ void Executor<config>::final_step() {
 
 template <Config config>
 template <int depth>
-__device__ void Executor<config>::search() {
+__device__ void Executor<config>::search(const DeviceContext<config> &context) {
     const int wid = threadIdx.x / THREADS_PER_WARP;
     const int lid = threadIdx.x % THREADS_PER_WARP;
 #ifndef NDEBUG
@@ -126,8 +145,8 @@ __device__ void Executor<config>::search() {
 #endif
 
     // 如果已经到达了终点，进入最终的处理
-    if (depth == device_context.schedule.total_prefix_num - 1) {
-        final_step();
+    if (depth == context.schedule.total_prefix_num - 1) {
+        final_step(context);
         return;
     }
 
@@ -143,15 +162,26 @@ __device__ void Executor<config>::search() {
         // 清除下一层的存储
         current.clear();
         // 从当前进度进行当前一次拓展
-        extend<depth>();
+        extend<depth>(context);
 
         // 递归进行搜素
         // 这句 if constexpr 不能缺少，否则会导致编译器无限递归
         // 不用特化的原因是，模板类中，成员函数无法单独特化
         if constexpr (depth + 1 < MAX_DEPTH) {
-            search<depth + 1>();
+            search<depth + 1>(context);
         }
     }
+}
+
+// kernel
+
+// 注意， Engine 总共不能超过 32KB，否则无法放到 constant memory
+// 中，我们就只能再传指针。
+template <Config config>
+__global__ void pattern_matching_kernel(Executor<config> engine,
+                                        DeviceContext<config> context,
+                                        unsigned long long *ans) {
+    engine.perform_search(ans, context);
 }
 
 }  // namespace Engine

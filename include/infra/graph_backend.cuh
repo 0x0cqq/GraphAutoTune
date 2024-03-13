@@ -70,6 +70,24 @@ class GlobalMemoryGraph {
     }
 
   public:
+    __host__ void to_device() {
+        EIndex_t *d_vertexes;
+        VIndex_t *d_edges;
+        cudaMalloc(&d_vertexes, sizeof(EIndex_t) * (_v_cnt + 1));
+        cudaMalloc(&d_edges, sizeof(VIndex_t) * _e_cnt);
+        cudaMemcpy(d_vertexes, _vertexes, sizeof(EIndex_t) * (_v_cnt + 1),
+                   cudaMemcpyHostToDevice);
+        cudaMemcpy(d_edges, _edges, sizeof(VIndex_t) * _e_cnt,
+                   cudaMemcpyHostToDevice);
+        // 释放内存
+        delete[] _vertexes;
+        delete[] _edges;
+
+        // 更改指针
+        _vertexes = d_vertexes;
+        _edges = d_edges;
+    }
+
     __host__ __device__ VIndex_t v_cnt() const { return this->_v_cnt; }
     __host__ __device__ EIndex_t e_cnt() const { return this->_e_cnt; }
     __host__ __device__ EIndex_t *vertexes() const { return this->_vertexes; }

@@ -10,6 +10,7 @@ namespace cg = cooperative_groups;
 #include "core/types.hpp"
 #include "core/unordered_vertex_set.cuh"
 #include "core/vertex_set.cuh"
+#include "utils/cuda_utils.cuh"
 
 namespace Engine {
 
@@ -24,7 +25,9 @@ class StorageUnit {
     static_assert(Core::IsVertexSetImpl<VertexSet>);
 };
 
-// 第 LEVEL 层的存储。
+// 第 LEVEL 层的存储。这个结构体应该仅使用指针。
+// 我们会直接在 GPU 上
+// 默认情况下，这个结构体的所有空间都是 0
 template <Config config>
 class LevelStorage {
   private:
@@ -34,9 +37,7 @@ class LevelStorage {
     static constexpr int NUM_BLOCKS = 1000;
     // 该层总共的内存大小。
     static constexpr int TOTAL_SIZE = BLOCK_SIZE * NUM_BLOCKS;
-    // level
-    int _level;
-    // 本层的存储指针
+    // 本层的存储空间
     VIndex_t _storage[TOTAL_SIZE];
     // 本层的 StorageUnit 指针
     StorageUnit<config> _storage_unit[NUM_BLOCKS];
@@ -59,14 +60,6 @@ class LevelStorage {
     __device__ int cur_storage_unit() const { return _cur_storage_unit; }
 
     __device__ int cur_vertex_index() const { return _cur_vertex_index; }
-
-    __device__ void init(int level) {
-        _allocated_blocks = 0;
-        _allocated_storage_units = 0;
-        _level = level;
-        _cur_storage_unit = 0;
-        _cur_vertex_index = 0;
-    }
 
     // 形式上清空该层的存储
     __device__ void clear() {
