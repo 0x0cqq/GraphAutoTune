@@ -14,11 +14,11 @@ class Pattern {
     std::vector<int8_t> _edges;
 
   public:
-    VIndex_t v_cnt() const { return _v_cnt; }
-    EIndex_t e_cnt() const { return _e_cnt; }
-    Pattern(VIndex_t v_cnt)
+    constexpr VIndex_t v_cnt() const { return _v_cnt; }
+    constexpr EIndex_t e_cnt() const { return _e_cnt; }
+    constexpr Pattern(VIndex_t v_cnt)
         : _v_cnt(v_cnt), _e_cnt(0), _edges(v_cnt * v_cnt, 0) {}
-    Pattern(const std::string_view &adj_mat)
+    constexpr Pattern(const std::string_view &adj_mat)
         : _v_cnt(0), _e_cnt(0), _edges(adj_mat.size(), 0) {
         int len = adj_mat.size();
         for (int n = 1; n < len; n++) {
@@ -37,25 +37,25 @@ class Pattern {
         }
     }
 
-    void add_edge(VIndex_t u, VIndex_t v) {
+    constexpr void add_edge(VIndex_t u, VIndex_t v) {
         _edges[u * _v_cnt + v] = 1;
         _edges[v * _v_cnt + u] = 1;
         _e_cnt++;
     }
 
-    bool has_edge(VIndex_t u, VIndex_t v) const {
+    constexpr bool has_edge(VIndex_t u, VIndex_t v) const {
         return _edges[u * _v_cnt + v] == 1;
     }
 
-    bool operator==(const Pattern &other) const {
+    constexpr bool operator==(const Pattern &other) const {
         return _v_cnt == other._v_cnt && _edges == other._edges;
     }
 };
 
 // helper functions
 
-Pattern get_permutated_pattern(const std::vector<int> &permutation_order,
-                               const Pattern &p) {
+constexpr Pattern get_permutated_pattern(
+    const std::vector<int> &permutation_order, const Pattern &p) {
     Pattern new_p{p.v_cnt()};
     for (int i = 0; i < p.v_cnt(); i++) {
         for (int j = 0; j < p.v_cnt(); j++) {
@@ -67,7 +67,7 @@ Pattern get_permutated_pattern(const std::vector<int> &permutation_order,
 }
 
 // 每一个点都必须与排在前面的某个节点相连
-bool is_pattern_valid(const Pattern &p) {
+constexpr bool is_pattern_valid(const Pattern &p) {
     // every point(except the first one) must connect to some one previous in
     // the permutation
     for (int i = 1; i < p.v_cnt(); i++) {

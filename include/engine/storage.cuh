@@ -14,19 +14,26 @@ namespace cg = cooperative_groups;
 
 namespace Engine {
 
-// 包括一个 Ordered Vertex Set 对应的 Unordered Vertex Set
-// 的信息，有一个指针连往外侧
 template <Config config>
 class StorageUnit {
   public:
-    Core::UnorderedVertexSet<MAX_DEPTH> subtraction_set;
     using VertexSet = VertexSetTypeDispatcher<config>::type;
-    VertexSet vertex_set;
     static_assert(Core::IsVertexSetImpl<VertexSet>);
+
+    // Unordered Vertex Set，记录了目前已经选择的节点的编号
+    Core::UnorderedVertexSet<MAX_DEPTH> subtraction_set;
+    // Ordered Vertex Set，记录了当前的 Prefix 的 dependency set 相交的结果
+    VertexSet vertex_set;
+
+    // 所有的在上面层的 Prefix 在哪里，每层一个
+    // 获取 father prefix 的 vertex set: fathers[father_prefix]->vertex_set
+    // 然后做 Intersect
+    // TODO: 考虑只记录父亲的位置。但是区别不大。
+    StorageUnit<config>* fathers[MAX_DEPTH];
 };
 
 // 第 LEVEL 层的存储。这个结构体应该仅使用指针。
-// 我们会直接在 GPU 上
+// 我们会直接在 GPU 上。之后可以考虑多架构。
 // 默认情况下，这个结构体的所有空间都是 0
 template <Config config>
 class LevelStorage {

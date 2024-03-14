@@ -85,6 +85,15 @@
         "__bit_reference": "cpp",
         "__functional_03": "cpp",
         "filesystem": "cpp",
-        "locale": "cpp"
-    }
+        "locale": "cpp",
+        "ranges": "cpp",
+        "span": "cpp"
+    },
+    "C_Cpp.formatting": "clangFormat",
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
+    "C_Cpp.inlayHints.autoDeclarationTypes.showOnLeft": true,
+    "C_Cpp.inlayHints.parameterNames.enabled": true,
+    "C_Cpp.inlayHints.referenceOperator.enabled": true,
+    "C_Cpp.experimentalFeatures": "enabled"
 }

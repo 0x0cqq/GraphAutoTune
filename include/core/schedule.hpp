@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 
+#include "configs/gpu_consts.cuh"
 #include "core/graph.cuh"
 #include "core/pattern.hpp"
 
@@ -13,11 +14,12 @@ namespace Core {
 
 class Prefix {
   public:
-    static constexpr int MAX_DEPTH = 10;
     VIndex_t data[MAX_DEPTH];  // Prefix 的内容
     int depth;                 // Prefix 拥有的长度
 
-    Prefix(const std::vector<VIndex_t> &_data) {
+    constexpr Prefix() : depth(0) {}
+
+    constexpr Prefix(const std::vector<VIndex_t> &_data) {
         assert(_data.size() <= MAX_DEPTH);
         depth = _data.size();
         for (int i = 0; i < depth; i++) {
@@ -25,13 +27,14 @@ class Prefix {
         }
     }
 
-    bool operator==(const Prefix &other) const {
+    constexpr bool operator==(const Prefix &other) const {
         if (depth != other.depth) {
             return false;
         }
         return std::equal(data, data + depth, other.data);
     }
-    bool operator==(const std::vector<VIndex_t> &other) const {
+
+    constexpr bool operator==(const std::vector<VIndex_t> &other) const {
         if (depth != other.size()) {
             return false;
         }
@@ -47,7 +50,7 @@ class Prefix {
     }
 };
 
-int get_iep_suffix_num(const Pattern &p) {
+constexpr int get_iep_suffix_num(const Pattern &p) {
     // 最后的若干个节点，他们没有相互的依赖。
     // 只需要检验最靠前的节点和后面的所有的节点没有相互的依赖
     for (int k = 2; k <= p.v_cnt() - 2; k++) {
@@ -67,7 +70,7 @@ int get_iep_suffix_num(const Pattern &p) {
 };
 
 // s 是邻接矩阵，但是去重，去掉自环，bit 长度为 n * (n - 1) / 2
-bool is_connected(int s, int n) {
+constexpr bool is_connected(int s, int n) {
     // 枚举所有子图
     std::vector<bool> connected(n * n, false);
     // 连接所有的边
@@ -106,7 +109,7 @@ bool is_connected(int s, int n) {
 };
 
 // 计算 n 个点的联通图，边数为 偶数/奇数 的数量
-std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
+constexpr std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
     assert(k * (k - 1) / 2 < 32);  // avoid too many edges
     std::vector<std::pair<int, int>> graph_cnt(k + 1);
 
@@ -190,7 +193,8 @@ struct IEPGroup {
 };
 
 // 获取所有让 p 的自同构的 permutation
-std::vector<std::vector<int>> get_isomorphism_permutations(const Pattern &p) {
+constexpr std::vector<std::vector<int>> get_isomorphism_permutations(
+    const Pattern &p) {
     std::vector<std::vector<int>> ans{};
     std::vector<int> perm{};
     for (int i = 0; i < p.v_cnt(); i++) {
@@ -206,7 +210,7 @@ std::vector<std::vector<int>> get_isomorphism_permutations(const Pattern &p) {
     return ans;
 }
 
-int get_isomorphism_multiplicity(const Pattern &p) {
+constexpr int get_isomorphism_multiplicity(const Pattern &p) {
     std::vector<std::vector<int>> isomorphism_permutations =
         get_isomorphism_permutations(p);
     return isomorphism_permutations.size();
@@ -272,7 +276,7 @@ void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
     }
 }
 
-IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
+constexpr IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
     int iep_suffix_num = get_iep_suffix_num(p);
     if (iep_suffix_num <= 1) {
         // 无法使用
@@ -449,4 +453,50 @@ class Schedule {
         //                                permutation_order.end()));
     }
 };
+
+struct IEPData {
+    static constexpr int MAX_PREFIXES = 20;
+    static constexpr int MAX_IEP_GROUPS = 50;
+    int iep_prefix_num;
+    int subgroups_num;
+    int iep_vertex_id[MAX_PREFIXES];
+    int iep_ans_pos[MAX_IEP_GROUPS];
+    int iep_coef[MAX_IEP_GROUPS];
+    bool iep_flag[MAX_IEP_GROUPS];
+    constexpr IEPData(const IEPInfo &info) {
+        iep_prefix_num = info.iep_vertex_id.size();
+        subgroups_num = info.iep_ans_pos.size();
+        for (int i = 0; i < iep_prefix_num; i++) {
+            iep_vertex_id[i] = info.iep_vertex_id[i];
+        }
+        for (int i = 0; i < subgroups_num; i++) {
+            iep_ans_pos[i] = info.iep_ans_pos[i];
+            iep_coef[i] = info.iep_coef[i];
+            iep_flag[i] = info.iep_flag[i];
+        }
+    }
+};
+
+// data class, used for data transmission
+struct ScheduleData {
+    static constexpr int MAX_PREFIXES = 20;
+    int basic_prefix_num;
+    int total_prefix_num;
+    Prefix prefixes[MAX_PREFIXES];
+    int prefix_fathers[MAX_PREFIXES];
+    IEPData iep_data;
+    constexpr ScheduleData(const Schedule &schedule)
+        : basic_prefix_num(schedule.basic_prefix_num),
+          total_prefix_num(schedule.total_prefix_num),
+          iep_data(schedule.iep_info) {
+        for (int i = 0; i < schedule.prefixs.size(); i++) {
+            prefixes[i] = schedule.prefixs[i];
+            prefix_fathers[i] = schedule.prefixs_father[i];
+        }
+    }
+    constexpr void to_device() const {
+        // do nothing here. no pointer
+    }
+};
+
 }  // namespace Core

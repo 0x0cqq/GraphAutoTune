@@ -19,16 +19,16 @@ template <Config config>
 struct DeviceContext {
     using GraphBackend = GraphBackendTypeDispatcher<config>::type;
     // 图挖掘的 Schedule
-    Core::Schedule schedule;
+    Core::ScheduleData schedule_data;
     // 提供图数据访问的后端
     GraphBackend graph_backend;
 
     __host__ DeviceContext(const Core::Schedule &_schedule,
                            const GraphBackend &_graph_backend)
-        : schedule(_schedule), graph_backend(_graph_backend) {}
+        : schedule_data(_schedule), graph_backend(_graph_backend) {}
 
     __host__ void to_device() {
-        schedule.to_device();
+        schedule_data.to_device();
         graph_backend.to_device();
     }
 };
@@ -88,10 +88,10 @@ class Executor {
 template <Config config>
 template <int depth>
 __device__ void Executor<config>::extend(const DeviceContext<config> &context) {
-    extern __shared__ WorkerInfo workerInfos[];
+    // extern __shared__ WorkerInfo workerInfos[];
     const LevelStorage<config> &last = storages[depth - 1];
     LevelStorage<config> &current = storages[depth];
-    WorkerInfo &workerInfo = workerInfos[depth];
+    // WorkerInfo &workerInfo = workerInfos[depth];
     const int wid = threadIdx.x / THREADS_PER_WARP;
     const int lid = threadIdx.x % THREADS_PER_WARP;
     // 在 GPU 上 Extend，每个 Warp 作为一个 Worker.
@@ -128,7 +128,7 @@ __device__ void Executor<config>::final_step(
     const int wid = threadIdx.x / THREADS_PER_WARP;
     const int lid = threadIdx.x % THREADS_PER_WARP;
     if (lid == 0) {
-        // TODO: This need to be fill
+        // TODO: 目前仅为占位符
         workerInfos[wid].local_answer += 1;
     }
 }
@@ -145,7 +145,7 @@ __device__ void Executor<config>::search(const DeviceContext<config> &context) {
 #endif
 
     // 如果已经到达了终点，进入最终的处理
-    if (depth == context.schedule.total_prefix_num - 1) {
+    if (depth == context.schedule_data.total_prefix_num - 1) {
         final_step(context);
         return;
     }
@@ -182,6 +182,26 @@ __global__ void pattern_matching_kernel(Executor<config> engine,
                                         DeviceContext<config> context,
                                         unsigned long long *ans) {
     engine.perform_search(ans, context);
+}
+
+// 封装了一下
+template <Config config>
+unsigned long long pattern_matching(Executor<config> &engine,
+                                    DeviceContext<config> &context) {
+    unsigned long long *ans;
+    gpuErrchk(cudaMallocManaged(&ans, sizeof(unsigned long long)));
+    *ans = 0ull;
+
+    pattern_matching_kernel<config>
+        <<<num_blocks, THREADS_PER_BLOCK,
+           sizeof(WorkerInfo) * MAX_DEPTH * WARPS_PER_BLOCK>>>(engine, context,
+                                                               ans);
+    gpuErrchk(cudaDeviceSynchronize());
+    gpuErrchk(cudaPeekAtLastError());
+
+    unsigned long long ret = *ans;
+    gpuErrchk(cudaFree(ans));
+    return ret;
 }
 
 }  // namespace Engine

@@ -26,27 +26,22 @@ int main() {
     std::cout << "Size of Device Context: " << sizeof(context) << " Bytes"
               << std::endl;
 
+    context.to_device();
+
     // 2. 构建 Engine
     Engine::Executor<default_config> engine{GPU_DEVICE};
     std::cout << "Size of Executor: " << sizeof(engine) << " Bytes"
               << std::endl;
 
-    // 2. Answer 变量
-    unsigned long long *ans;
-    gpuErrchk(cudaMallocManaged(&ans, sizeof(unsigned long long)));
-    *ans = 0ull;
-
     // 3. 进行 Match
     std::cout << "Enter the kernel..." << std::endl;
-    Engine::pattern_matching_kernel<default_config>
-        <<<1, 32>>>(engine, context, ans);
 
-    gpuErrchk(cudaDeviceSynchronize());
-    gpuErrchk(cudaPeekAtLastError());
+    unsigned long long ans =
+        Engine::pattern_matching<default_config>(engine, context);
 
     // 4. 输出结果
 
-    std::cout << "Answer: " << *ans << std::endl;
+    std::cout << "Answer: " << ans << std::endl;
 
     // 输出结果
     return 0;
