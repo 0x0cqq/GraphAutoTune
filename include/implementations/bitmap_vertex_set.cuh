@@ -17,6 +17,12 @@ class BitmapVertexSet {
     VIndex_t _non_zero_cnt;
 
   public:
+    __device__ void init_empty(VIndex_t *storage, VIndex_t storage_size) {
+        static_assert(config.vertex_set_config.vertex_store_type == Bitmap);
+        _data = storage, _storage_space = storage_size, _non_zero_cnt = 0;
+        memset(_data, 0, _storage_space * sizeof(VIndex_t));
+    }
+
     __device__ void clear() {
         _non_zero_cnt = 0;
         memset(_data, 0, _storage_space * sizeof(VIndex_t));
@@ -30,7 +36,8 @@ class BitmapVertexSet {
 
     __device__ VIndex_t size() { return _non_zero_cnt; }
 
-    __device__ void intersect(const BitmapVertexSet &b);
+    __device__ void intersect(const BitmapVertexSet &a,
+                              const BitmapVertexSet &b);
 };
 
 }  // namespace GPU
@@ -86,19 +93,19 @@ __device__ void BitmapVertexSet<config>::init(VIndex_t *input_data,
         _storage_space = input_size;
     }
     __threadfence_block();
-};
+}
 
 template <Config config>
-__device__ void BitmapVertexSet<config>::intersect(const BitmapVertexSet &b) {
-    const int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
+__device__ void BitmapVertexSet<config>::intersect(const BitmapVertexSet &a,
+                                                   const BitmapVertexSet &b) {
     const int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
-    for (int index = 0; index < _storage_space; index += THREADS_PER_WARP) {
-        if (index + lid < _storage_space)
-            _data[index + lid] &= b._data[index + lid];
+    for (int i = 0; i < this->_storage_space; i += THREADS_PER_WARP) {
+        if (i + lid < this->_storage_space)
+            this->_data[i + lid] = a._data[i + lid] & b._data[i + lid];
     }
     __threadfence_block();
-    int t = calculate_non_zero_cnt(_data, _storage_space);
-    if (lid == 0) _non_zero_cnt = t;
+    int t = calculate_non_zero_cnt(this->_data, this->_storage_space);
+    if (lid == 0) this->_non_zero_cnt = t;
     __threadfence_block();
 }
 };  // namespace GPU

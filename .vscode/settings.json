@@ -87,7 +87,8 @@
         "filesystem": "cpp",
         "locale": "cpp",
         "ranges": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "nvfunctional": "cpp"
     },
     "C_Cpp.formatting": "clangFormat",
     "C_Cpp.default.cppStandard": "c++20",

@@ -32,6 +32,7 @@ class StorageUnit {
     StorageUnit<config>* fathers[MAX_DEPTH];
 };
 
+/**
 // 第 LEVEL 层的存储。这个结构体应该仅使用指针。
 // 我们会直接在 GPU 上。之后可以考虑多架构。
 // 默认情况下，这个结构体的所有空间都是 0
@@ -93,6 +94,59 @@ class LevelStorage {
             atomicAdd(&_allocated_storage_units, 1);
             // 返回分配的内存块的指针。
             return _storage + last_allocated_blocks * BLOCK_SIZE;
+        }
+    }
+};
+
+*/
+
+template <Config config>
+class LevelStorage {
+  private:
+    static constexpr int MAX_SET_SIZE = 2000;  // 每个 Set 最多 2000 个数
+    static constexpr int NUMS_STORAGE_UNIT = 1000;        // 1000 个 Vertex Set
+    VIndex_t _storage[MAX_SET_SIZE * NUMS_STORAGE_UNIT];  // 存储空间
+    StorageUnit<config> _storage_unit[NUMS_STORAGE_UNIT];
+    int _cur_storage_unit;  // 当前处理到的 Vertex Set 的 index
+    int _cur_vertex_index;  // 当前处理到的 vertex 在 Set 中的 index
+
+    int _allocated_storage_units;  // 已经分配出去的 Storage Unit 的个数
+
+  public:
+    __device__ const StorageUnit<config>& storage_unit(int i) const {
+        return _storage_unit[i];
+    }
+
+    __device__ StorageUnit<config>& storage_unit(int i) {
+        return _storage_unit[i];
+    }
+
+    __device__ bool extend_finished() const {
+        return _cur_storage_unit == _allocated_storage_units - 1 &&
+               _cur_vertex_index ==
+                   _storage_unit[_cur_storage_unit].vertex_set.size();
+    }
+
+    __device__ int cur_storage_unit() const { return _cur_storage_unit; }
+
+    __device__ int cur_vertex_index() const { return _cur_vertex_index; }
+
+    __device__ int allocated_storage_units() const {
+        return _allocated_storage_units;
+    }
+
+    __device__ void clear() {
+        _cur_storage_unit = 0;
+        _cur_vertex_index = 0;
+        _allocated_storage_units = 0;
+    }
+    __device__ VIndex_t* allocate() {
+        int last_allocated_units = atomicAdd(&_allocated_storage_units, 1);
+        if (last_allocated_units > NUMS_STORAGE_UNIT) {
+            atomicSub(&_allocated_storage_units, 1);
+            return nullptr;
+        } else {
+            return _storage + last_allocated_units * MAX_SET_SIZE;
         }
     }
 };

@@ -1,7 +1,10 @@
 #pragma once
 
+#include <cooperative_groups.h>
+
 #include <array>
 #include <concepts>
+#include <nvfunctional>
 
 #include "configs/config.hpp"
 #include "configs/gpu_consts.cuh"
@@ -18,7 +21,19 @@ class ArrayVertexSet {
     VIndex_t* _data;
 
   public:
-    __device__ void init(VIndex_t* input_data, VIndex_t input_size);
+    __device__ void init_empty(VIndex_t* storage, VIndex_t storage_size) {
+        static_assert(config.vertex_set_config.vertex_store_type == Array);
+        _data = storage, _allocated_size = storage_size, _size = 0;
+    }
+
+    __device__ void init(VIndex_t* input_data, VIndex_t input_size) {
+        static_assert(config.vertex_set_config.vertex_store_type == Array);
+
+        const int lid = threadIdx.x % THREADS_PER_WARP;
+        if (lid == 0) {
+            _data = input_data, _allocated_size = _size = input_size;
+        }
+    }
 
     __device__ VIndex_t size() const { return _size; }
 
@@ -28,7 +43,23 @@ class ArrayVertexSet {
 
     __device__ size_t storage_space() const { return _allocated_size; }
 
-    __device__ void intersect(const ArrayVertexSet<config>& b);
+    // 对 Output 没有任何假设，除了空间是够的之外。
+    // TODO: 或可以用 __restrict__ 修饰符加速
+    __device__ void intersect(const ArrayVertexSet& a, const ArrayVertexSet& b);
+
+    // 提供一个遍历的接口，但是具体的操作是通过 nvstd::function 函子传进来的。
+    // 我们会让整个 Warp 一起调用这个 f。
+    __device__ void foreach_vertex(
+        const nvstd::function<void(VIndex_t)>& f) const {
+        const int wid = threadIdx.x / THREADS_PER_WARP;
+        const int global_wid = blockIdx.x * WARPS_PER_BLOCK + wid;
+
+        for (int base = 0; base < _size; base += num_total_warps) {
+            if (base + global_wid < _size) {
+                f(_data[base + global_wid]);
+            }
+        }
+    }
 };
 
 }  // namespace GPU
@@ -129,23 +160,12 @@ __device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
         bool found = 0;
         VIndex_t u = 0;
         if (num_done + lid < na) {
-            u = a[num_done];  // u: an element in set a
+            u = a[num_done + lid];
             search_dispatcher<config>(u, b, nb);
         }
         if (found) out[out_size++] = u;
     }
     return out_size;
-}
-
-template <Config config>
-__device__ void ArrayVertexSet<config>::init(VIndex_t* input_data,
-                                             VIndex_t input_size) {
-    static_assert(config.vertex_set_config.vertex_store_type == Array);
-
-    const int lid = threadIdx.x % THREADS_PER_WARP;
-    if (lid == 0) {
-        _data = input_data, _allocated_size = _size = input_size;
-    }
 }
 
 template <Config config>
@@ -160,10 +180,10 @@ __device__ VIndex_t do_intersection_dispatcher(VIndex_t* out, const VIndex_t* a,
 }
 
 template <Config config>
-__device__ void ArrayVertexSet<config>::intersect(
-    const ArrayVertexSet<config>& b) {
-    _size = do_intersection_dispatcher<config>(data(), data(), b.data(), size(),
-                                               b.size());
+__device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
+                                                  const ArrayVertexSet& b) {
+    this->_size = do_intersection_dispatcher<config>(
+        this->data(), a.data(), b.data(), a.size(), b.size());
 }
 
 }  // namespace GPU

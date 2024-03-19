@@ -18,7 +18,8 @@ concept IsVertexSetImpl = requires(Impl t, VIndex_t *data, VIndex_t size) {
     { t.data() } -> std::same_as<VIndex_t *>;
     { t.storage_space() } -> std::same_as<size_t>;
     { t.clear() } -> std::same_as<void>;
-    { t.intersect(t) } -> std::same_as<void>;
+    { t.intersect(t, t) } -> std::same_as<void>;
+    // TODO: 增加 for each
 };
 
 }  // namespace Core

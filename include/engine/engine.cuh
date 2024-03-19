@@ -12,9 +12,10 @@
 
 namespace Engine {
 
-// GPU 上，整个 Device 所需要的所有的其他的东西，都一起打包进来，例如 Schedule
-// 等。这里面的变量应当是不会改变的，我们将会将其整体放进 constant memory 中。
-
+// 整个 Device 所需要的所有变量一起打包进来，如 ScheduleData 等。
+// 这里面的变量应当是不会改变的，我们将会将其整体放进 constant memory 中。
+// 通过直接给 Kernel 函数传参
+// 之后考虑通过元编程传递一部分。
 template <Config config>
 struct DeviceContext {
     using GraphBackend = GraphBackendTypeDispatcher<config>::type;
@@ -36,6 +37,8 @@ struct DeviceContext {
 template <Config config>
 class Executor {
   private:
+    using VertexSet = VertexSetTypeDispatcher<config>::type;
+
     // 搜索过程中每层所需要的临时存储
     LevelStorage<config> *storages;
 
@@ -96,27 +99,82 @@ __device__ void Executor<config>::extend(const DeviceContext<config> &context) {
     const int lid = threadIdx.x % THREADS_PER_WARP;
     // 在 GPU 上 Extend，每个 Warp 作为一个 Worker.
 
+    const int prefix_id = depth;
+
 #ifndef NDEBUG
     if (wid == 0 && lid == 0) {
         printf("extend: %d\n", depth);
     }
 #endif
+    // 这里先编写一个最简单的版本：每个 Vertex Set 的空间是固定的
+
     // 并行地枚举上一层的所有的 vertex set 的所有的节点
+    // 遍历 Vertex Set
+    for (int i = last.cur_storage_unit(); i < last.allocated_storage_units();
+         i++) {
+        const auto &storage_unit = last.storage_unit(i);
+        int size = storage_unit.vertex_set.size();
+        // 遍历 Set 中的 Vertex (每个 Warp 分到一个节点)
+        storage_unit.vertex_set.foreach_vertex([&](VIndex_t new_v) {
+            // 扩展操作
+            VIndex_t *neighbors = context.graph_backend.get_neigh(new_v);
+            VIndex_t neighbors_cnt = context.graph_backend.get_neigh_cnt(new_v);
+            // 构建 Vertex Set: Neighbor Vertex Set
+            VertexSet new_vertex_set;
+            new_vertex_set.init(neighbors, neighbors_cnt);
 
-    // 先进行一次代价较低的计算（每个点O(1)），得到每个点产生的 Vertex
-    // 所需要的存储大小
+            // 找到 father 的 Vertex Set
+            // 当前正在处理第 prefix_id 个 prefix
+            int father_index = context.schedule_data.prefix_fathers[prefix_id];
+            const VertexSet &father_vertex_set =
+                storage_unit.fathers[father_index]->vertex_set;
 
-    // 然后再分配空间
+            // 找到下一层的 Vertex Set
+            // TODO: index_new 还不知道怎么获得。要和 allocate
+            // 一起获得？allocate 要和 storage unit 耦合到一起吧。
+            int index_new = 1;
+            VertexSet &next_vertex_set =
+                current.storage_unit(index_new).vertex_set;
+            VIndex_t *space = current.allocate();
+            next_vertex_set.init_empty(
+                space, neighbors_cnt);  // 不会比 neighbors_cnt 大 //
+                                        // 之后考虑优化掉这个 size 参数
+            next_vertex_set.intersect(father_vertex_set, new_vertex_set);
+        });
+    }
 
-    // 然后下面的就可以完美并行了
+    // 分配空间：进行一次前缀和。
 
-    // loop_vertex 也就是这个节点，每一个节点可以产生一个新的 vertex
-    // set，填在下一层
+    // 扩展：相互独立的。
 
-    // 根据 prefix 的 father，在 storages 的某一层的某一个位置，找到 father
-    // dependency 的 vertex set
+    // for loop_vertex in last.vertexes:
+    // 这个循环怎么写呢？如果 storage Unit 的 space
+    // 不能完整确定，这个循环是两层的 外层是 storage unit，内层才是 vertex 每个
+    // vertex 要分给一个不同的 warp，所以这里同步只能靠 atomic。 两个变量的
+    // atomic 是很难搞的。 ~1000 warp
+
+    // 还有一个问题，就是怎么从 index 反查属于哪个 storage unit。
+    // block -> storage unit?
+    // 如果一个 block 16K 的数，也就是 64KB (fit 一下 L2 Cache？)
+    // 那么总共 16GB 的存储，需要 1M / 4 = 256K 个 block，可以维护一个反查表？
+
+    // loop_vertex 也就是这个节点，每一个节点可以产生一个新的 vertex set
+    // vset_1 = neighbor(loop vertex)
+
+    // 根据 prefix 的 father，在 storages
+    // 的某一层的某一个位置[这个是对于所有的节点都是一致的] 找到 father
+    // dependency set 对应的 vertex set father_vertex_set =
+    // storages[prefix.father][father_dependency_set_id]
+    //
+    // 100 个 last 里面的 vertex，实际可能需要的 vertex set 只有几个
+    // 大大减小读存储压力？
+    // 但是会不会带来内存冲突？每个 Warp 读的都是同样的内存，很多个 Warp
+    // 读的也很可能是同样的内存
+    // L1表示一级缓存，每个SM都有自己L1，但是L2是所有SM公用的，除了L1缓存外，还有只读缓存和常量缓存。
 
     // 两者求交得到新的 Vertex Set
+    // new_vertex_set = vset_1.intersect(father_vertex_set)
+    // current[xxx.id] = new_vertex_set
 
     // 如果新的 Vertex Set 不为空，那么就放到下一层的 storages 中
 }

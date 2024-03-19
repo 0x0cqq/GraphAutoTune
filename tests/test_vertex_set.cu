@@ -20,7 +20,7 @@ __global__ void kernel(Impl &vset1, Impl &vset2, VIndex_t *data1,
     __syncthreads();
     __threadfence_block();
 
-    vset1.intersect(vset2);
+    vset1.intersect(vset1, vset2);
     __syncthreads();
     __threadfence_block();
 
