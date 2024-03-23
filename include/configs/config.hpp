@@ -17,13 +17,7 @@ struct Config {
 
 // 类型的默认占位符
 template <Config config>
-class VertexSetTypeDispatcher {
-  public:
-    using type = void;
-};
+class VertexSetTypeDispatcher {};
 
 template <Config config>
-class GraphBackendTypeDispatcher {
-  public:
-    using type = void;
-};
+class GraphBackendTypeDispatcher {};

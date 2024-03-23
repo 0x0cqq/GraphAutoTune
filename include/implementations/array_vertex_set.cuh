@@ -50,13 +50,14 @@ class ArrayVertexSet {
     // 提供一个遍历的接口，但是具体的操作是通过 nvstd::function 函子传进来的。
     // 我们会让整个 Warp 一起调用这个 f。
     __device__ void foreach_vertex(
-        const nvstd::function<void(VIndex_t)>& f) const {
+        const nvstd::function<void(VIndex_t, size_t)>& f) const {
         const int wid = threadIdx.x / THREADS_PER_WARP;
         const int global_wid = blockIdx.x * WARPS_PER_BLOCK + wid;
 
         for (int base = 0; base < _size; base += num_total_warps) {
-            if (base + global_wid < _size) {
-                f(_data[base + global_wid]);
+            int index = base + global_wid;
+            if (index < _size) {
+                f(_data[index], index);
             }
         }
     }

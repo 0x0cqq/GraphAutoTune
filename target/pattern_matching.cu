@@ -13,11 +13,13 @@ int main() {
     // 数据图
     std::ifstream graph_file{PROJECT_ROOT / "data/test_graph.bin"};
     // 模式图
-    std::string_view pattern_str{"0100110110010110110010100"};  // house
+    std::string_view pattern_str{"0111101111011110"};
+    // std::string_view pattern_str{"0100110110010110110010100"};  // house
 
     // 1. 构建 Context
     // Schedule
     Core::Schedule schedule{pattern_str};
+    schedule.output();
     // 图后端
     Infra::GlobalMemoryGraph<default_config> graph{graph_file, true};
 
@@ -29,15 +31,14 @@ int main() {
     context.to_device();
 
     // 2. 构建 Engine
-    Engine::Executor<default_config> engine{GPU_DEVICE};
+    Engine::Executor<default_config> engine{CPU_DEVICE};
     std::cout << "Size of Executor: " << sizeof(engine) << " Bytes"
               << std::endl;
 
     // 3. 进行 Match
-    std::cout << "Enter the kernel..." << std::endl;
+    std::cout << "Enter the Search..." << std::endl;
 
-    unsigned long long ans =
-        Engine::pattern_matching<default_config>(engine, context);
+    unsigned long long ans = engine.perform_search(context);
 
     // 4. 输出结果
 

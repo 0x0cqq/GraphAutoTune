@@ -25,11 +25,14 @@ class StorageUnit {
     // Ordered Vertex Set，记录了当前的 Prefix 的 dependency set 相交的结果
     VertexSet vertex_set;
 
+    // 给上层用的
+    VIndex_t vertex_set_size;
+
     // 所有的在上面层的 Prefix 在哪里，每层一个
     // 获取 father prefix 的 vertex set: fathers[father_prefix]->vertex_set
     // 然后做 Intersect
     // TODO: 考虑只记录父亲的位置。但是区别不大。
-    StorageUnit<config>* fathers[MAX_DEPTH];
+    const StorageUnit<config>* fathers[MAX_DEPTH];
 };
 
 /**
@@ -48,7 +51,7 @@ class LevelStorage {
     // 本层的存储空间
     VIndex_t _storage[TOTAL_SIZE];
     // 本层的 StorageUnit 指针
-    StorageUnit<config> _storage_unit[NUM_BLOCKS];
+    StorageUnit<config> _units[NUM_BLOCKS];
     // 已经分配出去的块数
     int _allocated_blocks;
     // 已经分配出去的 StorageUnit 数量
@@ -62,10 +65,10 @@ class LevelStorage {
     __device__ bool extend_finished() const {
         return _cur_storage_unit == _allocated_storage_units - 1 &&
                _cur_vertex_index ==
-                   _storage_unit[_cur_storage_unit].vertex_set.size();
+                   _units[_cur_storage_unit].vertex_set.size();
     }
 
-    __device__ int cur_storage_unit() const { return _cur_storage_unit; }
+    __device__ int cur_unit() const { return _cur_storage_unit; }
 
     __device__ int cur_vertex_index() const { return _cur_vertex_index; }
 
@@ -104,50 +107,72 @@ template <Config config>
 class LevelStorage {
   private:
     static constexpr int MAX_SET_SIZE = 2000;  // 每个 Set 最多 2000 个数
-    static constexpr int NUMS_STORAGE_UNIT = 1000;        // 1000 个 Vertex Set
-    VIndex_t _storage[MAX_SET_SIZE * NUMS_STORAGE_UNIT];  // 存储空间
-    StorageUnit<config> _storage_unit[NUMS_STORAGE_UNIT];
+    static constexpr int NUMS_STORAGE_UNIT = 1000;  // 1000 个 Vertex Set
+    VIndex_t* _storage;                             // 存储空间
+    StorageUnit<config>* _units;
+    DeviceType _device_type;
     int _cur_storage_unit;  // 当前处理到的 Vertex Set 的 index
     int _cur_vertex_index;  // 当前处理到的 vertex 在 Set 中的 index
 
     int _allocated_storage_units;  // 已经分配出去的 Storage Unit 的个数
 
   public:
-    __device__ const StorageUnit<config>& storage_unit(int i) const {
-        return _storage_unit[i];
+    __host__ LevelStorage(DeviceType device_type = CPU_DEVICE)
+        : _device_type(device_type) {
+        if (device_type == DeviceType::GPU_DEVICE) {
+            gpuErrchk(cudaMalloc(&_storage, sizeof(VIndex_t) * MAX_SET_SIZE *
+                                                NUMS_STORAGE_UNIT));
+            gpuErrchk(cudaMalloc(
+                &_units, sizeof(StorageUnit<config>) * NUMS_STORAGE_UNIT));
+        } else if (device_type == DeviceType::CPU_DEVICE) {
+            _storage = new VIndex_t[MAX_SET_SIZE * NUMS_STORAGE_UNIT];
+            _units = new StorageUnit<config>[NUMS_STORAGE_UNIT];
+        } else {
+            assert(false);
+        }
+    }
+    __host__ ~LevelStorage() {
+        if (_device_type == DeviceType::GPU_DEVICE) {
+            gpuErrchk(cudaFree(&_storage));
+            gpuErrchk(cudaFree(&_units));
+        } else if (_device_type == DeviceType::CPU_DEVICE) {
+            delete _storage;
+            delete _units;
+        } else {
+            assert(false);
+        }
     }
 
-    __device__ StorageUnit<config>& storage_unit(int i) {
-        return _storage_unit[i];
+    __host__ void for_each_unit(
+        std::function<void(const StorageUnit<config>&)> func) {
+        while (_cur_storage_unit < _allocated_storage_units) {
+            func(_units[_cur_storage_unit]);
+            _cur_storage_unit++;
+        }
     }
 
-    __device__ bool extend_finished() const {
-        return _cur_storage_unit == _allocated_storage_units - 1 &&
-               _cur_vertex_index ==
-                   _storage_unit[_cur_storage_unit].vertex_set.size();
+    __host__ const StorageUnit<config>* units() const { return _units; }
+
+    __host__ StorageUnit<config>* units() { return _units; }
+
+    __host__ const StorageUnit<config>& unit(int i) const { return _units[i]; }
+
+    __host__ StorageUnit<config>& unit(int i) { return _units[i]; }
+
+    __host__ bool extend_finished() const {
+        return _cur_storage_unit == _allocated_storage_units;
     }
 
-    __device__ int cur_storage_unit() const { return _cur_storage_unit; }
+    __host__ int cur_unit() const { return _cur_storage_unit; }
 
-    __device__ int cur_vertex_index() const { return _cur_vertex_index; }
+    __host__ int cur_vertex_index() const { return _cur_vertex_index; }
 
-    __device__ int allocated_storage_units() const {
-        return _allocated_storage_units;
-    }
+    __host__ int alloc_units() const { return _allocated_storage_units; }
 
-    __device__ void clear() {
+    __host__ void clear() {
         _cur_storage_unit = 0;
         _cur_vertex_index = 0;
-        _allocated_storage_units = 0;
-    }
-    __device__ VIndex_t* allocate() {
-        int last_allocated_units = atomicAdd(&_allocated_storage_units, 1);
-        if (last_allocated_units > NUMS_STORAGE_UNIT) {
-            atomicSub(&_allocated_storage_units, 1);
-            return nullptr;
-        } else {
-            return _storage + last_allocated_units * MAX_SET_SIZE;
-        }
+        _allocated_storage_units = NUMS_STORAGE_UNIT;
     }
 };
 }  // namespace Engine
