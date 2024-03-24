@@ -104,20 +104,29 @@ class LevelStorage {
 */
 
 template <Config config>
+__global__ void allocate_storage_units(StorageUnit<config>* units,
+                                       VIndex_t* space, const int SIZE,
+                                       const int COUNT) {
+    for (int i = 0; i < COUNT; i++) {
+        units[i].vertex_set.init_empty(space + i * SIZE, SIZE);
+    }
+}
+
+template <Config config>
 class LevelStorage {
-  private:
+  public:
     static constexpr int MAX_SET_SIZE = 2000;  // 每个 Set 最多 2000 个数
     static constexpr int NUMS_STORAGE_UNIT = 1000;  // 1000 个 Vertex Set
-    VIndex_t* _storage;                             // 存储空间
+  private:
+    VIndex_t* _storage;  // 存储空间
     StorageUnit<config>* _units;
     DeviceType _device_type;
     int _cur_storage_unit;  // 当前处理到的 Vertex Set 的 index
-    int _cur_vertex_index;  // 当前处理到的 vertex 在 Set 中的 index
-
-    int _allocated_storage_units;  // 已经分配出去的 Storage Unit 的个数
 
   public:
-    __host__ LevelStorage(DeviceType device_type = CPU_DEVICE)
+    int _allocated_storage_units;  // 已经分配出去的 Storage Unit 的个数
+
+    __host__ LevelStorage(DeviceType device_type = GPU_DEVICE)
         : _device_type(device_type) {
         if (device_type == DeviceType::GPU_DEVICE) {
             gpuErrchk(cudaMalloc(&_storage, sizeof(VIndex_t) * MAX_SET_SIZE *
@@ -133,8 +142,8 @@ class LevelStorage {
     }
     __host__ ~LevelStorage() {
         if (_device_type == DeviceType::GPU_DEVICE) {
-            gpuErrchk(cudaFree(&_storage));
-            gpuErrchk(cudaFree(&_units));
+            gpuErrchk(cudaFree(_storage));
+            gpuErrchk(cudaFree(_units));
         } else if (_device_type == DeviceType::CPU_DEVICE) {
             delete _storage;
             delete _units;
@@ -165,14 +174,15 @@ class LevelStorage {
 
     __host__ int cur_unit() const { return _cur_storage_unit; }
 
-    __host__ int cur_vertex_index() const { return _cur_vertex_index; }
-
     __host__ int alloc_units() const { return _allocated_storage_units; }
 
     __host__ void clear() {
         _cur_storage_unit = 0;
-        _cur_vertex_index = 0;
         _allocated_storage_units = NUMS_STORAGE_UNIT;
+    }
+    __host__ void reallocate() {
+        allocate_storage_units<config><<<num_blocks, THREADS_PER_BLOCK>>>(
+            _units, _storage, MAX_SET_SIZE, NUMS_STORAGE_UNIT);
     }
 };
 }  // namespace Engine

@@ -1,1 +1,1 @@
-make -j && srun -p V100 --gres=gpu:1 ./bin/pattern_matching 2> err.log
+make -j && srun -p V100 --gres=gpu:1 compute-sanitizer --tool memcheck ./bin/pattern_matching 

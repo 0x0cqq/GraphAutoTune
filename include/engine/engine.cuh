@@ -40,7 +40,11 @@ class Executor {
         int start_index = 0;
 
         last.for_each_unit([&](const StorageUnit<config> &unit) {
-            int cur_prefix_id = depth;
+#ifndef NDEBUG
+            std::cerr << "Extend Storage Unit, start_index: " << start_index
+                      << std::endl;
+#endif
+            int cur_prefix_id = depth + 1;
             auto next_level_units = cur.units();
 
             extend_storage_unit<config, depth>
@@ -57,6 +61,8 @@ class Executor {
             start_index += num_vertexes;
             assert(start_index <= 1000);
         });
+
+        cur._allocated_storage_units = start_index;
 
 #ifndef DNEBUG
         std::cerr << "Leave Host Extend at level" << depth << std::endl;
@@ -100,9 +106,30 @@ class Executor {
 
     __host__ unsigned long long perform_search(
         const DeviceContext<config> &context) {
-        // 在这里做第一层
-        for(VIndex_t vid = 0; vid < context.schedule_data.vertex_num; vid++) {
-            
+        // 在这里做第一层，把 Neighborhood 填进去
+        VIndex_t start_vertex = 0;
+        VIndex_t *size_this_time_dev;
+        VIndex_t size_this_time;
+        gpuErrchk(cudaMalloc(&size_this_time_dev, sizeof(VIndex_t)));
+        while (true) {
+            first_layer_kernel<config><<<1, 1>>>(
+                context, storages[0].units(), start_vertex, size_this_time_dev);
+
+            gpuErrchk(cudaDeviceSynchronize());
+            gpuErrchk(cudaPeekAtLastError());
+
+            gpuErrchk(cudaMemcpy(&size_this_time, size_this_time_dev,
+                                 sizeof(VIndex_t), cudaMemcpyDeviceToHost));
+
+            if (size_this_time == 0) {
+                break;
+            }
+
+            storages[0].clear();
+            storages[0]._allocated_storage_units = size_this_time;
+
+            start_vertex += size_this_time;
+
             search<0>(context);
         }
         // 从第 0 个 prefix 开始搜索
@@ -131,8 +158,8 @@ __host__ void Executor<config>::search(const DeviceContext<config> &context) {
         return;
     }
 
-    const LevelStorage<config> &last = storages[depth - 1];
-    LevelStorage<config> &current = storages[depth];
+    const LevelStorage<config> &last = storages[depth];
+    LevelStorage<config> &current = storages[depth + 1];
 
     while (true) {
         // 直到上一层全部被拓展完完成
@@ -145,6 +172,9 @@ __host__ void Executor<config>::search(const DeviceContext<config> &context) {
 
         // 清除下一层的存储
         current.clear();
+        // 重新分配存储
+        current.reallocate();
+
         // 从当前进度进行当前一次拓展
         extend<depth>(context);
 
