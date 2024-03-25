@@ -19,13 +19,13 @@ __global__ void extend_storage_unit(DeviceContext<config> context,
     int father_prefix_id = context.schedule_data.prefix_fathers[cur_prefix_id];
     const VertexSet &father_vertex_set =
         unit.fathers[father_prefix_id]->vertex_set;
-    if (lane_id == 0) {
-        printf("warp_id: %d", warp_id);
-        printf("cur_prefix_id: %d\n", cur_prefix_id);
-        printf("father_prefix_id: %d set:%p\n", father_prefix_id,
-               &father_vertex_set);
-        printf("father_vertex_set.size(): %d\n", father_vertex_set.size());
-    }
+    // if (lane_id == 0) {
+    //     printf("warp_id: %d", warp_id);
+    //     printf("cur_prefix_id: %d\n", cur_prefix_id);
+    //     printf("father_prefix_id: %d set:%p\n", father_prefix_id,
+    //            &father_vertex_set);
+    //     printf("father_vertex_set.size(): %d\n", father_vertex_set.size());
+    // }
 
     unit.vertex_set.foreach_vertex([&](VIndex_t new_v, size_t index) {
         // 扩展操作

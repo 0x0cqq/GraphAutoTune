@@ -9,9 +9,20 @@
 
 constexpr Config default_config{};
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        // too few arguments
+        std::cerr << "Too few arguments" << std::endl;
+        return 1;
+    }
+    std::string graph_name{argv[1]};
+    std::cout << "Graph Name: " << graph_name << std::endl;
     // 数据图
-    std::ifstream graph_file{PROJECT_ROOT / "data/test_graph.bin"};
+    std::ifstream graph_file{PROJECT_ROOT / graph_name};
+    if (!graph_file.is_open()) {
+        std::cerr << "Cannot open the graph file" << std::endl;
+        return 1;
+    }
     // 模式图
     std::string_view pattern_str{"0111101111011110"};
     // std::string_view pattern_str{"0100110110010110110010100"};  // house
@@ -22,6 +33,7 @@ int main() {
     schedule.output();
     // 图后端
     Infra::GlobalMemoryGraph<default_config> graph{graph_file, true};
+    graph.output();
 
     // 设备上下文
     Engine::DeviceContext<default_config> context{schedule, graph};

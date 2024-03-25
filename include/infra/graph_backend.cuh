@@ -99,6 +99,20 @@ class GlobalMemoryGraph {
         return _vertexes[v + 1] - _vertexes[v];
     }
 
+    __host__ bool has_edge(VIndex_t u, VIndex_t v) const {
+        if (get_neigh_cnt(u) > get_neigh_cnt(v)) {
+            std::swap(u, v);
+        }
+        VIndex_t *neigh = get_neigh(u), *end = get_neigh(u) + get_neigh_cnt(u);
+        int *t = std::lower_bound(neigh, end, v);
+        return t != end && *t == v;
+    }
+
+    __host__ void output() const {
+        std::cout << "Vertex Count: " << v_cnt() << std::endl;
+        std::cout << "Edge Count: " << e_cnt() << std::endl;
+    }
+
     __host__ GlobalMemoryGraph(std::ifstream &file, bool binary) {
         if (binary) {
             build_from_binary_file(file);

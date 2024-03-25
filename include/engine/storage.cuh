@@ -152,11 +152,14 @@ class LevelStorage {
         }
     }
 
-    __host__ void for_each_unit(
-        std::function<void(const StorageUnit<config>&)> func) {
+    __host__ void enumerate_unit(
+        std::function<bool(const StorageUnit<config>&)> func) {
         while (_cur_storage_unit < _allocated_storage_units) {
-            func(_units[_cur_storage_unit]);
-            _cur_storage_unit++;
+            if (func(_units[_cur_storage_unit])) {
+                _cur_storage_unit++;
+            } else {
+                break;
+            }
         }
     }
 

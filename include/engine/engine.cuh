@@ -23,6 +23,7 @@ class Executor {
     // 搜索过程中每层所需要的临时存储。
     DeviceType _device_type;
     LevelStorage<config> *storages;
+    unsigned long long ans;
 
     // CPU端的搜索
     template <int depth>
@@ -31,7 +32,7 @@ class Executor {
     template <int depth>
     __host__ void extend(const DeviceContext<config> &context) {
 #ifndef NDEBUG
-        std::cerr << "Enter Host Extend at level" << depth << std::endl;
+        std::cerr << "Enter Host Extend at level " << depth << std::endl;
 #endif
 
         LevelStorage<config> &last = storages[depth];
@@ -39,9 +40,22 @@ class Executor {
 
         int start_index = 0;
 
-        last.for_each_unit([&](const StorageUnit<config> &unit) {
+        // 这个 For Each 是有序的，不是并行的。
+        // 这个函数是有状态的！
+        last.enumerate_unit([&](const StorageUnit<config> &unit) {
+            VIndex_t num_vertexes;
+            gpuErrchk(cudaMemcpy(&num_vertexes, &unit.vertex_set_size,
+                                 sizeof(VIndex_t), cudaMemcpyDeviceToHost));
+
+            // next level is full!
+            if (start_index + num_vertexes >
+                LevelStorage<config>::NUMS_STORAGE_UNIT) {
+                return false;
+            }
+
 #ifndef NDEBUG
-            std::cerr << "Extend Storage Unit, start_index: " << start_index
+            std::cerr << "Extend Storage Unit, next_level start_index: "
+                      << start_index << ", number_vertex: " << num_vertexes
                       << std::endl;
 #endif
             int cur_prefix_id = depth + 1;
@@ -54,12 +68,9 @@ class Executor {
             gpuErrchk(cudaDeviceSynchronize());
             gpuErrchk(cudaPeekAtLastError());
 
-            VIndex_t num_vertexes;
-            gpuErrchk(cudaMemcpy(&num_vertexes, &unit.vertex_set_size,
-                                 sizeof(VIndex_t), cudaMemcpyDeviceToHost));
-
             start_index += num_vertexes;
-            assert(start_index <= 1000);
+
+            return true;
         });
 
         cur._allocated_storage_units = start_index;
@@ -73,9 +84,22 @@ class Executor {
     __host__ void final_step_kernel(const DeviceContext<config> &context);
 
     __host__ void final_step(const DeviceContext<config> &context) {
+        int depth = context.schedule_data.total_prefix_num - 1;
+
 #ifndef NDEBUG
-        std::cerr << "Enter Final Step" << std::endl;
+        std::cerr << "Enter Final Step, depth " << depth << std::endl;
 #endif
+        LevelStorage<config> &last = storages[depth];
+
+        last.enumerate_unit([&](const StorageUnit<config> &unit) {
+            VIndex_t num_vertexes;
+            gpuErrchk(cudaMemcpy(&num_vertexes, &unit.vertex_set_size,
+                                 sizeof(VIndex_t), cudaMemcpyDeviceToHost));
+
+            this->ans += num_vertexes;
+
+            return true;
+        });
     }
 
   public:
@@ -106,6 +130,8 @@ class Executor {
 
     __host__ unsigned long long perform_search(
         const DeviceContext<config> &context) {
+        // 重置答案
+        this->ans = 0;
         // 在这里做第一层，把 Neighborhood 填进去
         VIndex_t start_vertex = 0;
         VIndex_t *size_this_time_dev;
@@ -133,8 +159,7 @@ class Executor {
             search<0>(context);
         }
         // 从第 0 个 prefix 开始搜索
-        // return ans;
-        return 0;
+        return this->ans;
     }
 };
 
@@ -177,6 +202,8 @@ __host__ void Executor<config>::search(const DeviceContext<config> &context) {
 
         // 从当前进度进行当前一次拓展
         extend<depth>(context);
+
+        usleep(10000);
 
         // 递归进行搜素
         // 这句 if constexpr 不能缺少，否则会导致编译器无限递归
