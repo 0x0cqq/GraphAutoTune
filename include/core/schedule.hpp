@@ -41,10 +41,13 @@ class Prefix {
         return std::equal(data, data + depth, other.begin());
     }
 
-    void output() const {
-        std::cout << "Prefix: ";
+    void output(int id, int father_id = -1) const {
+        std::cout << "Prefix " << id << ": ";
         for (int i = 0; i < depth; i++) {
             std::cout << data[i] << " ";
+        }
+        if (father_id != -1) {
+            std::cout << "F: " << father_id;
         }
         std::cout << std::endl;
     }
@@ -108,6 +111,30 @@ constexpr bool is_connected(int s, int n) {
     return true;
 };
 
+// 需要一个在完全图中的 naive match 来检测 restriction 的有效性
+// restriction = (x, y) 代表 v_x < v_y 必须得到满足。
+constexpr int naive_match_in_full_graph(
+    const Pattern &p, const std::vector<std::pair<int, int>> &restrictions) {
+    if (p.v_cnt() >= 10) {
+        std::cerr
+            << "The Pattern is too big, please reduce the v_cnt less than 10"
+            << std::endl;
+        return -1;
+    }
+    std::vector<VIndex_t> data(p.v_cnt());
+    std::generate(data.begin(), data.end(), [i = 0]() mutable { return i++; });
+    int ans = 0;
+    do {
+        bool flag = std::all_of(
+            restrictions.cbegin(), restrictions.cend(),
+            [&data](const auto &p) { return data[p.first] < data[p.second]; });
+        if (flag) {
+            ans++;
+        }
+    } while (std::next_permutation(data.begin(), data.end()));
+    return ans;
+}
+
 // 计算 n 个点的联通图，边数为 偶数/奇数 的数量
 constexpr std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
     assert(k * (k - 1) / 2 < 32);  // avoid too many edges
@@ -138,6 +165,17 @@ struct IEPInfo {
     std::vector<int> iep_ans_pos;    // gid -> vid: int -> int, pos[gid] = vid
     std::vector<int> iep_coef;       // subgroup -> coef: int -> int
     std::vector<bool> iep_flag;      // subgroup -> flag: int -> bool
+
+    constexpr void permute(const std::vector<int> &permutation) {
+        // 只有 iep_vertex_id 和 vertex id 有关系
+        for (int i = 0; i < iep_vertex_id.size(); i++) {
+            int origin_prefix_id = iep_vertex_id[i];
+            int place = std::find(permutation.begin(), permutation.end(),
+                                  origin_prefix_id) -
+                        permutation.begin();
+            iep_vertex_id[i] = place;
+        }
+    }
 
     void output() const {
         for (int vid = 0; vid < iep_vertex_id.size(); vid++) {
@@ -309,6 +347,40 @@ class Schedule {
 
     // restrictions
 
+    constexpr void sort_permutation() {
+        std::vector<int> permutation(prefixs.size());
+        std::generate(permutation.begin(), permutation.end(),
+                      [i = 0]() mutable { return i++; });
+        std::sort(permutation.begin(), permutation.end(),
+                  [&, this](int a, int b) {
+                      auto &p_a = this->prefixs[a], p_b = this->prefixs[b];
+
+                      return std::make_pair(p_a.data[p_a.depth - 1], a) <
+                             std::make_pair(p_b.data[p_b.depth - 1], b);
+                  });
+
+        // shuffle_prefix_father
+        std::vector<Prefix> new_prefixs;
+        for (int i = 0; i < prefixs.size(); i++) {
+            new_prefixs.push_back(prefixs[permutation[i]]);
+        }
+        prefixs = new_prefixs;
+
+        // shuffle prefixs_father & iep_info according to_the permutation
+        std::vector<int> new_prefixs_father(prefixs_father.size());
+        for (int i = 0; i < prefixs_father.size(); i++) {
+            int father_this_place = prefixs_father[permutation[i]];
+            int father_new_place =
+                std::find(permutation.begin(), permutation.end(),
+                          father_this_place) -
+                permutation.begin();
+            new_prefixs_father[i] = father_new_place;
+        }
+        prefixs_father = new_prefixs_father;
+
+        iep_info.permute(permutation);
+    }
+
     // 将一个新的依赖集合插入前缀。
     int insert_prefix(std::vector<int> &data) {
         if (data.size() == 0) {
@@ -423,9 +495,9 @@ class Schedule {
 
     void output() const {
         std::cout << "PREFIXS:" << std::endl;
-        for (const auto &prefix : prefixs) {
+        for (int i = 0; i < prefixs.size(); i++) {
             std::cout << "\t";
-            prefix.output();
+            prefixs[i].output(i, prefixs_father[i]);
         }
         std::cout << "IEP_INFO: " << std::endl;
         iep_info.output();

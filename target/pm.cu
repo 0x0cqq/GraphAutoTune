@@ -10,7 +10,7 @@
 constexpr Config default_config{};
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
+    if (argc < 3) {
         // too few arguments
         std::cerr << "Too few arguments" << std::endl;
         return 1;
@@ -24,8 +24,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     // 模式图
-    std::string_view pattern_str{"0111101111011110"};
-    // std::string_view pattern_str{"0100110110010110110010100"};  // house
+    std::string pattern_str{argv[2]};
+    // std::string_view pattern_str{"0111101111011110"};            // 4-clique
+    // std::string_view pattern_str{"0100110110010110110010100"};   // house
 
     // 1. 构建 Context
     // Schedule

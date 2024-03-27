@@ -12,11 +12,11 @@ int pattern_matching_func(int depth, std::vector<int> &choose_vertexes,
                           Infra::GlobalMemoryGraph<config> &graph,
                           Core::Pattern &pattern) {
     if (depth == pattern.v_cnt()) {
-        std::cout << "Pattern found: ";
-        for (int i = 0; i < choose_vertexes.size(); i++) {
-            std::cout << choose_vertexes[i] << " ";
-        }
-        std::cout << std::endl;
+        // std::cout << "Pattern found: ";
+        // for (int i = 0; i < choose_vertexes.size(); i++) {
+        //     std::cout << choose_vertexes[i] << " ";
+        // }
+        // std::cout << std::endl;
         return 1;
     }
     int ans = 0;
@@ -26,7 +26,8 @@ int pattern_matching_func(int depth, std::vector<int> &choose_vertexes,
         for (int j = 0; j < choose_vertexes.size(); j++) {
             bool exist_in_pattern = pattern.has_edge(j, depth);
             bool exist_in_graph = graph.has_edge(choose_vertexes[j], i);
-            if (exist_in_pattern && !exist_in_graph) {
+            bool already_chosen = choose_vertexes[j] == i;
+            if (already_chosen || (exist_in_pattern && !exist_in_graph)) {
                 flag = false;
                 break;
             }
@@ -50,7 +51,7 @@ int pattern_matching(Infra::GlobalMemoryGraph<config> &graph,
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
+    if (argc < 3) {
         // too few arguments
         std::cerr << "Too few arguments" << std::endl;
         return 1;
@@ -61,12 +62,13 @@ int main(int argc, char *argv[]) {
         std::cerr << "Cannot open the graph file" << std::endl;
         return 1;
     }
-    std::string_view pattern_str{"0111101111011110"};
+    std::string pattern_str{argv[2]};
 
     Infra::GlobalMemoryGraph<default_config> data_graph{graph_bin, true};
 
     Core::Pattern pattern{pattern_str};
 
-    std::cout << pattern_matching(data_graph, pattern) << std::endl;
+    std::cout << "Answer: " << pattern_matching(data_graph, pattern)
+              << std::endl;
     return 0;
 }

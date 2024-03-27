@@ -115,8 +115,8 @@ __global__ void allocate_storage_units(StorageUnit<config>* units,
 template <Config config>
 class LevelStorage {
   public:
-    static constexpr int MAX_SET_SIZE = 2000;  // 每个 Set 最多 2000 个数
-    static constexpr int NUMS_STORAGE_UNIT = 1000;  // 1000 个 Vertex Set
+    static constexpr int MAX_SET_SIZE = 200;  // 每个 Set 最多 x 个数
+    static constexpr int NUMS_STORAGE_UNIT = 100000;  // y 个 Vertex Set
   private:
     VIndex_t* _storage;  // 存储空间
     StorageUnit<config>* _units;

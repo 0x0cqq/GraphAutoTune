@@ -18,7 +18,7 @@ class Pattern {
     constexpr EIndex_t e_cnt() const { return _e_cnt; }
     constexpr Pattern(VIndex_t v_cnt)
         : _v_cnt(v_cnt), _e_cnt(0), _edges(v_cnt * v_cnt, 0) {}
-    constexpr Pattern(const std::string_view &adj_mat)
+    constexpr Pattern(const std::string &adj_mat)
         : _v_cnt(0), _e_cnt(0), _edges(adj_mat.size(), 0) {
         int len = adj_mat.size();
         for (int n = 1; n < len; n++) {

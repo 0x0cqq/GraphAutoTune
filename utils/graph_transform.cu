@@ -1,15 +1,21 @@
+#include "configs/project_consts.hpp"
 #include "infra/graph_backend.cuh"
 
 constexpr Config config{};
 
-int main() {
-    std::ifstream graph_input = std::ifstream("../data/data_graph_30.txt");
+int main(int argc, char* argv[]) {
+    if (argc <= 1) {
+        std::cerr << "Too less arguments" << std::endl;
+        return 1;
+    }
+    std::string file_name{argv[1]};
+    std::ifstream graph_input{PROJECT_ROOT / "data" / (file_name + ".txt")};
     if (!graph_input.is_open()) {
         std::cerr << "Failed to open graph file" << std::endl;
         return 1;
     }
 
-    std::ofstream graph_output = std::ofstream("../data/data_graph_30.bin");
+    std::ofstream graph_output{PROJECT_ROOT / "data" / (file_name + ".bin")};
     if (!graph_output.is_open()) {
         std::cerr << "Failed to open output file" << std::endl;
         return 1;

@@ -1,1 +1,0 @@
-make -j && srun -p V100 --gres=gpu:1 compute-sanitizer --tool memcheck ./bin/pm data/data_graph_30.bin 

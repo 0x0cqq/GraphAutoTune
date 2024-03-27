@@ -19,16 +19,13 @@ class UnorderedVertexSet {
     }
 
     __device__ void clear() {
-        for (int i = 0; i < SIZE; i++) {
-            _data[i] = -1;
-        }
+        const int lid = threadIdx.x % THREADS_PER_WARP;
+        if (lid < SIZE) _data[lid] = -1;
     }
 
     __device__ void copy(const UnorderedVertexSet<SIZE>& other) {
-        // TODO: 更新到多线程
-        for (int i = 0; i < SIZE; i++) {
-            _data[i] = other._data[i];
-        }
+        const int lid = threadIdx.x % THREADS_PER_WARP;
+        if (lid < SIZE) _data[lid] = other._data[lid];
     }
 
     template <size_t N>

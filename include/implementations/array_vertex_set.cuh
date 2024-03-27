@@ -23,7 +23,11 @@ class ArrayVertexSet {
   public:
     __device__ void init_empty(VIndex_t* storage, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
-        _data = storage, _allocated_size = storage_size, _size = 0;
+        const int lid = threadIdx.x % THREADS_PER_WARP;
+
+        if (lid == 0) {
+            _data = storage, _allocated_size = storage_size, _size = 0;
+        }
     }
 
     __device__ void init(VIndex_t* input_data, VIndex_t input_size) {
@@ -32,6 +36,19 @@ class ArrayVertexSet {
         const int lid = threadIdx.x % THREADS_PER_WARP;
         if (lid == 0) {
             _data = input_data, _allocated_size = _size = input_size;
+        }
+    }
+
+    __device__ void init_copy(const VIndex_t* input_data, VIndex_t input_size) {
+        static_assert(config.vertex_set_config.vertex_store_type == Array);
+        const int lid = threadIdx.x % THREADS_PER_WARP;
+        assert(_allocated_size >= input_size);
+        for (VIndex_t base = 0; base < input_size; base += THREADS_PER_WARP) {
+            VIndex_t i = base + lid;
+            if (i < input_size) _data[i] = input_data[i];
+        }
+        if (lid == 0) {
+            _size = input_size;
         }
     }
 
@@ -51,8 +68,9 @@ class ArrayVertexSet {
     // 我们会让整个 Warp 一起调用这个 f。
     __device__ void foreach_vertex(
         const nvstd::function<void(VIndex_t, size_t)>& f) const {
+        const int bid = blockIdx.x;
         const int wid = threadIdx.x / THREADS_PER_WARP;
-        const int global_wid = blockIdx.x * WARPS_PER_BLOCK + wid;
+        const int global_wid = bid * WARPS_PER_BLOCK + wid;
 
         for (int base = 0; base < _size; base += num_total_warps) {
             int index = base + global_wid;
