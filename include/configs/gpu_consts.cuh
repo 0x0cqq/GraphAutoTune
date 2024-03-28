@@ -7,8 +7,10 @@ constexpr int WARPS_PER_BLOCK = THREADS_PER_BLOCK / THREADS_PER_WARP;
 constexpr int num_blocks = 10;
 constexpr int num_total_warps = num_blocks * WARPS_PER_BLOCK;
 
-// temporary
-constexpr int MAX_DEPTH = 10;
+// 最大的遍历深度
+constexpr int MAX_VERTEXES = 10;
+// 最多的 Prefix 个数
+constexpr int MAX_PREFIXS = 10;
 
 enum DeviceType {
     CPU_DEVICE,

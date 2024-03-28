@@ -14,13 +14,13 @@ namespace Core {
 
 class Prefix {
   public:
-    VIndex_t data[MAX_DEPTH];  // Prefix 的内容
-    int depth;                 // Prefix 拥有的长度
+    VIndex_t data[MAX_VERTEXES];  // Prefix 的内容
+    int depth;                    // Prefix 拥有的长度
 
     constexpr Prefix() : depth(0) {}
 
     constexpr Prefix(const std::vector<VIndex_t> &_data) {
-        assert(_data.size() <= MAX_DEPTH);
+        assert(_data.size() <= MAX_VERTEXES);
         depth = _data.size();
         for (int i = 0; i < depth; i++) {
             data[i] = _data[i];
@@ -339,15 +339,19 @@ constexpr IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
 
 class Schedule {
   public:
-    int basic_prefix_num;
+    int basic_vertexes;
     int total_prefix_num;
     std::vector<Prefix> prefixs;
+    // 第 i 个节点的 loop set 所用的 prefix
+    std::vector<int> loop_set_prefix_id;
+    // 最后一个是第 i 个节点的 prefixes
+    std::vector<int> vertex_prefix_start;
     std::vector<int> prefixs_father;
     IEPInfo iep_info;
 
     // restrictions
 
-    constexpr void sort_permutation() {
+    constexpr void sort_prefixs() {
         std::vector<int> permutation(prefixs.size());
         std::generate(permutation.begin(), permutation.end(),
                       [i = 0]() mutable { return i++; });
@@ -370,10 +374,16 @@ class Schedule {
         std::vector<int> new_prefixs_father(prefixs_father.size());
         for (int i = 0; i < prefixs_father.size(); i++) {
             int father_this_place = prefixs_father[permutation[i]];
-            int father_new_place =
-                std::find(permutation.begin(), permutation.end(),
-                          father_this_place) -
-                permutation.begin();
+
+            int father_new_place = 0;
+            if (father_this_place == -1) {
+                father_new_place = -1;
+            } else {
+                father_new_place =
+                    std::find(permutation.begin(), permutation.end(),
+                              father_this_place) -
+                    permutation.begin();
+            }
             new_prefixs_father[i] = father_new_place;
         }
         prefixs_father = new_prefixs_father;
@@ -418,6 +428,8 @@ class Schedule {
         IEPHelperInfo helper_info = generate_iep_helper_info(p);
         helper_info.output();
 
+        this->basic_vertexes = p.v_cnt() - helper_info.suffix_num;
+
         // 构建主 Schedule
 
         // 构建 basic_prefix，也就是不考虑 iep 情况下的 prefix。
@@ -429,13 +441,8 @@ class Schedule {
                 }
             }
             int prefix_id = insert_prefix(tmp_data);
-            // what to do with prefix id?
         }
-
-        basic_prefix_num = prefixs.size();
-
         // 构建 iep_prefix
-
         for (int rank = 0; rank < helper_info.groups.size(); rank++) {
             const auto &group = helper_info.groups[rank].group;
             const auto &coef = helper_info.groups[rank].coef;
@@ -481,8 +488,6 @@ class Schedule {
 
         total_prefix_num = prefixs.size();
 
-        // 处理 next ？
-
         // 如果没有 child，就只需要 size
 
         // 增加限制
@@ -494,6 +499,17 @@ class Schedule {
     }
 
     void output() const {
+        std::cout << "Basic vertexes:  " << basic_vertexes << std::endl;
+        std::cout << "Loop set prefix id: ";
+        for (int i = 0; i < basic_vertexes; i++) {
+            std::cout << loop_set_prefix_id[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Prefix start: ";
+        for (int i = 0; i < basic_vertexes; i++) {
+            std::cout << vertex_prefix_start[i] << " ";
+        }
+        std::cout << std::endl;
         std::cout << "PREFIXS:" << std::endl;
         for (int i = 0; i < prefixs.size(); i++) {
             std::cout << "\t";
@@ -503,9 +519,46 @@ class Schedule {
         iep_info.output();
     }
 
+    void build_loop_invariant(const Pattern &p) {
+        // loop_set_prefix_id
+        loop_set_prefix_id.clear();
+        loop_set_prefix_id.push_back(-1);
+        for (int i = 1; i < basic_vertexes; i++) {
+            std::vector<int> data;
+            for (int j = 0; j < i; j++) {
+                if (p.has_edge(j, i)) {
+                    data.push_back(j);
+                }
+            }
+            int pos = std::find(prefixs.begin(), prefixs.end(), data) -
+                      prefixs.begin();
+            if (pos == prefixs.size()) {
+                std::cerr << "Prefix not found for vertex " << i << ". Error."
+                          << std::endl;
+                exit(1);
+            }
+            loop_set_prefix_id.push_back(pos);
+        }
+
+        // vertex_prefixs_range
+        vertex_prefix_start.clear();
+        int current_prefix_id = 0;
+        for (int i = 0; i < basic_vertexes; i++) {
+            vertex_prefix_start.push_back(current_prefix_id);
+            while (prefixs[current_prefix_id]
+                       .data[prefixs[current_prefix_id].depth - 1] == i) {
+                current_prefix_id++;
+            }
+        }
+    }
+
     Schedule(const Pattern &p) {
         // 只用当前的顺序，不枚举 permutation
         calculate_pattern(p);
+        // 排序所有的前缀
+        sort_prefixs();
+        // 构建循环不变式
+        build_loop_invariant(p);
 
         // 最好的 permutation 以及对应的 cost 评估值
         // std::vector<int> best_permutation;
@@ -527,11 +580,10 @@ class Schedule {
 };
 
 struct IEPData {
-    static constexpr int MAX_PREFIXES = 20;
     static constexpr int MAX_IEP_GROUPS = 50;
     int iep_prefix_num;
     int subgroups_num;
-    int iep_vertex_id[MAX_PREFIXES];
+    int iep_vertex_id[MAX_PREFIXS];
     int iep_ans_pos[MAX_IEP_GROUPS];
     int iep_coef[MAX_IEP_GROUPS];
     bool iep_flag[MAX_IEP_GROUPS];
@@ -551,20 +603,26 @@ struct IEPData {
 
 // data class, used for data transmission
 struct ScheduleData {
-    static constexpr int MAX_PREFIXES = 20;
-    int basic_prefix_num;
+    int basic_vertexes;
     int total_prefix_num;
-    Prefix prefixes[MAX_PREFIXES];
-    int prefix_fathers[MAX_PREFIXES];
+    Prefix prefixes[MAX_PREFIXS];
+    int prefix_fathers[MAX_PREFIXS];
+    int vertex_prefix_start[MAX_VERTEXES + 1];  // 这里要包括最后一个
+    int loop_set_prefix_id[MAX_VERTEXES];
     IEPData iep_data;
     constexpr ScheduleData(const Schedule &schedule)
-        : basic_prefix_num(schedule.basic_prefix_num),
+        : basic_vertexes(schedule.basic_vertexes),
           total_prefix_num(schedule.total_prefix_num),
           iep_data(schedule.iep_info) {
         for (int i = 0; i < schedule.prefixs.size(); i++) {
             prefixes[i] = schedule.prefixs[i];
             prefix_fathers[i] = schedule.prefixs_father[i];
         }
+        for (int i = 0; i < basic_vertexes; i++) {
+            loop_set_prefix_id[i] = schedule.loop_set_prefix_id[i];
+            vertex_prefix_start[i] = schedule.vertex_prefix_start[i];
+        }
+        vertex_prefix_start[basic_vertexes] = total_prefix_num;
     }
     constexpr void to_device() const {
         // do nothing here. no pointer

@@ -8,10 +8,10 @@
 constexpr Config default_config{};
 
 TEST_CASE("Graph Test", "[graph]") {
-    std::ifstream graph_text{PROJECT_ROOT / "data/test_graph.txt"};
+    std::ifstream graph_text{PROJECT_ROOT / "data/data_graph_50.txt"};
     REQUIRE(graph_text.is_open());
 
-    std::ifstream graph_bin{PROJECT_ROOT / "data/test_graph.bin"};
+    std::ifstream graph_bin{PROJECT_ROOT / "data/data_graph_50.bin"};
     REQUIRE(graph_bin.is_open());
 
     Infra::GlobalMemoryGraph<default_config> graph_1{graph_text, false};
