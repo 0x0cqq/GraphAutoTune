@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     context.to_device();
 
     // 2. 构建 Engine
-    Engine::Executor<default_config> engine{CPU_DEVICE};
+    Engine::Executor<default_config> engine{GPU_DEVICE};
     std::cout << "Size of Executor: " << sizeof(engine) << " Bytes"
               << std::endl;
 

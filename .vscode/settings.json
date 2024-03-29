@@ -89,7 +89,8 @@
         "ranges": "cpp",
         "span": "cpp",
         "nvfunctional": "cpp",
-        "__debug": "cpp"
+        "__debug": "cpp",
+        "__functional_base": "cpp"
     },
     "C_Cpp.formatting": "clangFormat",
     "C_Cpp.default.cppStandard": "c++20",

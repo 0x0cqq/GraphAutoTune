@@ -25,4 +25,4 @@ struct DeviceContext {
     }
 };
 
-}
+}  // namespace Engine

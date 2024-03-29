@@ -21,12 +21,12 @@ class ArrayVertexSet {
     VIndex_t* _data;
 
   public:
-    __device__ void init_empty(VIndex_t* storage, VIndex_t storage_size) {
+    __device__ void init_empty(VIndex_t* space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         const int lid = threadIdx.x % THREADS_PER_WARP;
 
         if (lid == 0) {
-            _data = storage, _allocated_size = storage_size, _size = 0;
+            _data = space, _allocated_size = storage_size, _size = 0;
         }
     }
 
@@ -51,6 +51,8 @@ class ArrayVertexSet {
             _size = input_size;
         }
     }
+
+    __device__ VIndex_t get(VIndex_t idx) const { return _data[idx]; }
 
     __device__ VIndex_t size() const { return _size; }
 

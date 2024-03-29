@@ -17,9 +17,9 @@ class BitmapVertexSet {
     VIndex_t _non_zero_cnt;
 
   public:
-    __device__ void init_empty(VIndex_t *storage, VIndex_t storage_size) {
+    __device__ void init_empty(VIndex_t *space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Bitmap);
-        _data = storage, _storage_space = storage_size, _non_zero_cnt = 0;
+        _data = space, _storage_space = storage_size, _non_zero_cnt = 0;
         memset(_data, 0, _storage_space * sizeof(VIndex_t));
     }
 
