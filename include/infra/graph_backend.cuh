@@ -29,7 +29,7 @@ class GlobalMemoryGraph {
             file >> u >> v;
             if (u == v) {
 #ifndef NDEBUG
-                std::cerr << "Self loop detected: " << u << std::endl;
+                std::cout << "Self loop detected: " << u << std::endl;
 #endif
                 continue;
             }

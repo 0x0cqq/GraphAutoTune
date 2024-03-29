@@ -12,7 +12,7 @@ constexpr Config default_config{};
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         // too few arguments
-        std::cerr << "Too few arguments" << std::endl;
+        std::cout << "Too few arguments" << std::endl;
         return 1;
     }
     std::string graph_name{argv[1]};
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     // 数据图
     std::ifstream graph_file{PROJECT_ROOT / graph_name};
     if (!graph_file.is_open()) {
-        std::cerr << "Cannot open the graph file" << std::endl;
+        std::cout << "Cannot open the graph file" << std::endl;
         return 1;
     }
     // 模式图

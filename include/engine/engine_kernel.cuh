@@ -151,36 +151,36 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
         int l = start_uid, r = end_uid - 1;  // [l, r] 闭区间
         int target_value = start_extend_unit_id + next_extend_uid;
         while (l != r) {
-            int mid = (l + r + 1) / 2;
+            int mid = (l + r) / 2;
             int mid_value = cur_v_storage.unit_extend_sum[mid];
 
-            if (mid_value < target_value) {
-                l = mid;
+            if (mid_value <= target_value) {
+                l = mid + 1;
             } else {  // mid_value > target_value
-                r = mid - 1;
+                r = mid;
             }
         }
 
         int cur_level_uid = l;
-        int base_index = cur_v_storage.unit_extend_sum[cur_level_uid];
+        int base_index = cur_level_uid == 0
+                             ? 0
+                             : cur_v_storage.unit_extend_sum[cur_level_uid - 1];
+        int vertex_set_size = cur_v_storage.unit_extend_size[cur_level_uid];
         int vertex_index = target_value - base_index;
 
         int loop_set_uid = find_loop_set_uid<config, cur_pattern_vid>(
             context, v_storages, loop_set_prefix_id, cur_level_uid);
 
         if (lane_id == 0) {
-            printf(
-                "next_extend_uid: %d loop_set_uid: %d cur_level_uid: %d "
-                "vertex_index: %d target_value: %d base:%d next:%d\n",
-                next_extend_uid, loop_set_uid, cur_level_uid, vertex_index,
-                target_value, base_index,
-                cur_v_storage.unit_extend_sum[cur_level_uid + 1]);
-            // printf("pointer: %p\n",
-            //        loop_set_storage.vertex_set[loop_set_uid].data());
+            // printf(
+            //     "target_value: %d "
+            //     "cur_level_uid: %d vertex_index: %d base: %d size: %d\n",
+            //     target_value, cur_level_uid, vertex_index, base_index,
+            //     vertex_set_size);
+            // // printf("pointer: %p\n",
+            // //        loop_set_storage.vertex_set[loop_set_uid].data());
             assert(vertex_index >= 0);
-            assert(vertex_index <
-                   cur_v_storage.unit_extend_sum[cur_level_uid + 1] -
-                       base_index);
+            assert(vertex_index < vertex_set_size);
         }
 
         // vertex + index 获取 vertex 的接口
@@ -245,15 +245,19 @@ __global__ void extend_v_storage(const DeviceContext<config> context,
 }
 
 template <Config config>
-__global__ void get_next_unit(int current_unit, int *next_unit, int num_units,
+__global__ void get_next_unit(int current_unit, int *next_unit,
+                              int *next_total_units, int num_units,
                               VertexStorage<config> v_storage) {
-    VIndex_t current_unit_size = v_storage.unit_extend_sum[current_unit];
+    VIndex_t current_unit_size =
+        current_unit == 0 ? 0 : v_storage.unit_extend_sum[current_unit - 1];
     VIndex_t next_size = current_unit_size + num_units;
     *next_unit = current_unit;
     while (*next_unit < v_storage.num_units &&
            v_storage.unit_extend_sum[*next_unit] < next_size) {
         (*next_unit)++;
     }
+    *next_total_units =
+        v_storage.unit_extend_sum[*next_unit - 1] - current_unit_size;
 }
 
 }  // namespace Engine

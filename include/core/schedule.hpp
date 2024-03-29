@@ -116,7 +116,7 @@ constexpr bool is_connected(int s, int n) {
 constexpr int naive_match_in_full_graph(
     const Pattern &p, const std::vector<std::pair<int, int>> &restrictions) {
     if (p.v_cnt() >= 10) {
-        std::cerr
+        std::cout
             << "The Pattern is too big, please reduce the v_cnt less than 10"
             << std::endl;
         return -1;
@@ -339,6 +339,7 @@ constexpr IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
 
 class Schedule {
   public:
+    int suffix_num;
     int basic_vertexes;
     int total_prefix_num;
     std::vector<Prefix> prefixs;
@@ -419,7 +420,7 @@ class Schedule {
         // 存在一些没有爹的点，这是不合法的，会导致答案非常多
         if (!is_pattern_valid(p)) {
 #ifndef NDEBUG
-            std::cerr << "Invalid pattern" << std::endl;
+            std::cout << "Invalid pattern" << std::endl;
 #endif
             return;
         }
@@ -429,6 +430,7 @@ class Schedule {
         helper_info.output();
 
         this->basic_vertexes = p.v_cnt() - helper_info.suffix_num;
+        this->suffix_num = helper_info.suffix_num;
 
         // 构建主 Schedule
 
@@ -533,7 +535,7 @@ class Schedule {
             int pos = std::find(prefixs.begin(), prefixs.end(), data) -
                       prefixs.begin();
             if (pos == prefixs.size()) {
-                std::cerr << "Prefix not found for vertex " << i << ". Error."
+                std::cout << "Prefix not found for vertex " << i << ". Error."
                           << std::endl;
                 exit(1);
             }
@@ -603,6 +605,7 @@ struct IEPData {
 
 // data class, used for data transmission
 struct ScheduleData {
+    int suffix_num;
     int basic_vertexes;
     int total_prefix_num;
     Prefix prefixes[MAX_PREFIXS];
@@ -613,6 +616,7 @@ struct ScheduleData {
     constexpr ScheduleData(const Schedule &schedule)
         : basic_vertexes(schedule.basic_vertexes),
           total_prefix_num(schedule.total_prefix_num),
+          suffix_num(schedule.suffix_num),
           iep_data(schedule.iep_info) {
         for (int i = 0; i < schedule.prefixs.size(); i++) {
             prefixes[i] = schedule.prefixs[i];

@@ -43,12 +43,14 @@ class Executor {
 
     __host__ void final_step();
 
+    __host__ void final_step_with_iep();
+
   public:
     __host__ Executor(DeviceType device_type)
         : _device_type(device_type), device_context(nullptr) {
 #ifndef NDEBUG
-        std::cerr << "Executor Constructor, ";
-        std::cerr << "Device Type: " << device_type << std::endl;
+        std::cout << "Executor Constructor, ";
+        std::cout << "Device Type: " << device_type << std::endl;
 #endif
 
         // 给 prefix storage 里面的 vertex 分配一个标准的内存空间
@@ -64,7 +66,7 @@ class Executor {
         gpuErrchk(cudaDeviceSynchronize());
 
 #ifndef NDEBUG
-        std::cerr << "Executor Constructor Done" << std::endl;
+        std::cout << "Executor Constructor Done" << std::endl;
 #endif
     }
 
@@ -117,7 +119,7 @@ __host__ unsigned long long Executor<config>::perform_search(
         VIndex_t start = base_index,
                  end = std::min(v_cnt, base_index + NUMS_UNIT);
 #ifndef NDEBUG
-        std::cerr << "First Extend Kernel, start: " << start << ", end: " << end
+        std::cout << "First Extend Kernel, start: " << start << ", end: " << end
                   << std::endl;
 #endif
         first_extend_kernel<config><<<num_blocks, THREADS_PER_BLOCK>>>(
@@ -137,13 +139,17 @@ __host__ void Executor<config>::search() {
 #ifndef NDEBUG
     auto time_start = std::chrono::high_resolution_clock::now();
     if (cur_pattern_vid < LOG_DEPTH) {
-        std::cerr << "Search, enter level " << cur_pattern_vid << std::endl;
+        std::cout << "Search, enter level " << cur_pattern_vid << std::endl;
     }
 #endif
 
     // 如果已经处理完了不需要 IEP 的节点，进入最终的 IEP 处理
-    if (cur_pattern_vid == device_context->schedule_data.basic_vertexes) {
-        final_step();
+    if (cur_pattern_vid == device_context->schedule_data.basic_vertexes - 1) {
+        if (device_context->schedule_data.suffix_num == 0) {
+            final_step();
+        } else {
+            final_step_with_iep();
+        }
         return;
     }
 
@@ -165,7 +171,7 @@ __host__ void Executor<config>::search() {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         time_end - time_start);
     if (cur_pattern_vid < LOG_DEPTH) {
-        std::cerr << "Search, leave level " << cur_pattern_vid << ", time "
+        std::cout << "Search, leave level " << cur_pattern_vid << ", time "
                   << duration.count() << " ms" << std::endl;
     }
 #endif
@@ -176,7 +182,7 @@ template <Config config>
 template <int cur_pattern_vid>
 __host__ void Executor<config>::prepare() {
 #ifndef NDEBUG
-    std::cerr << "Enter prepare at level " << cur_pattern_vid << std::endl;
+    std::cout << "Enter prepare at level " << cur_pattern_vid << std::endl;
 #endif
     // 计算扩展相关的 size
     extend_v_storage<config, cur_pattern_vid>
@@ -190,7 +196,7 @@ __host__ void Executor<config>::prepare() {
     do_extend_size_sum(vertex_storages[cur_pattern_vid]);
 
 #ifndef NDEBUG
-    std::cerr << "Leave prepare at level " << cur_pattern_vid << std::endl;
+    std::cout << "Leave prepare at level " << cur_pattern_vid << std::endl;
 #endif
 }
 
@@ -201,10 +207,8 @@ __host__ bool Executor<config>::extend() {
 #ifndef NDEBUG
     auto time_start = std::chrono::high_resolution_clock::now();
     if (cur_pattern_vid < LOG_DEPTH) {
-        // std::cerr << "Enter Host Extend at level " <<
-        // cur_pattern_vertex_id
-        //           << ", progress at " << last.cur_unit() << "/"
-        //           << last.alloc_units() << std::endl;
+        std::cout << "Enter Host Extend at level " << cur_pattern_vid
+                  << std::endl;
     }
 #endif
 
@@ -213,16 +217,20 @@ __host__ bool Executor<config>::extend() {
 
     int cur_unit = cur_progress[cur_pattern_vid - 1];
     // 如果不需要拓展就直接返回 false
-    int *next_unit;
+    int *next_unit, *next_total_units;
     gpuErrchk(cudaMallocManaged(&next_unit, sizeof(int)));
-    get_next_unit<config><<<1, 1>>>(cur_unit, next_unit, NUMS_UNIT,
+    gpuErrchk(cudaMallocManaged(&next_total_units, sizeof(int)));
+    get_next_unit<config><<<1, 1>>>(cur_unit, next_unit, next_total_units,
+                                    NUMS_UNIT,
                                     vertex_storages[cur_pattern_vid - 1]);
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
 
     if (*next_unit == cur_unit) return false;
+
+    vertex_storages[cur_pattern_vid].num_units = *next_total_units;
 #ifndef NDEBUG
-    std::cerr << "Extend: [" << cur_unit << "," << *next_unit << ")"
+    std::cout << "Extend: [" << cur_unit << "," << *next_unit << ")"
               << std::endl;
 #endif
     extend_p_storage<config, cur_pattern_vid>
@@ -233,9 +241,10 @@ __host__ bool Executor<config>::extend() {
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
 
-    cur_progress[cur_pattern_vid] = *next_unit;
+    cur_progress[cur_pattern_vid - 1] = *next_unit;
 
     gpuErrchk(cudaFree(next_unit));
+    gpuErrchk(cudaFree(next_total_units));
     // 清除下一层的存储
     // current.clear();
     // 重新分配存储
@@ -246,7 +255,7 @@ __host__ bool Executor<config>::extend() {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         time_end - time_start);
     if (cur_pattern_vid < LOG_DEPTH) {
-        std::cerr << "Leave Host Extend at level " << cur_pattern_vid
+        std::cout << "Leave Host Extend at level " << cur_pattern_vid
                   << ", time " << duration.count() << " ms" << std::endl;
     }
 #endif
@@ -256,6 +265,23 @@ __host__ bool Executor<config>::extend() {
 
 template <Config config>
 __host__ void Executor<config>::final_step() {
+    // 先不加 IEP
+    int last_prefix_id =
+        this->device_context->schedule_data.total_prefix_num - 1;
+
+#ifndef NDEBUG
+    auto time_start = std::chrono::high_resolution_clock::now();
+#endif
+    ans += 1;  // Tmp
+#ifndef NDEBUG
+    auto time_end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        time_end - time_start);
+#endif
+}
+
+template <Config config>
+__host__ void Executor<config>::final_step_with_iep() {
     // 先不加 IEP
     int last_prefix_id =
         this->device_context->schedule_data.total_prefix_num - 1;
