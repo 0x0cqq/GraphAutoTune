@@ -53,7 +53,7 @@ class Prefix {
     }
 };
 
-constexpr int get_iep_suffix_num(const Pattern &p) {
+constexpr int get_iep_suffix_vertexes(const Pattern &p) {
     // 最后的若干个节点，他们没有相互的依赖。
     // 只需要检验最靠前的节点和后面的所有的节点没有相互的依赖
     for (int k = 2; k <= p.v_cnt() - 2; k++) {
@@ -255,12 +255,13 @@ constexpr int get_isomorphism_multiplicity(const Pattern &p) {
 }
 
 struct IEPHelperInfo {
-    int suffix_num;                // 有多少个点可以参与 IEP
+    int iep_suffix_vertexes;       // 有多少个点可以参与 IEP
     std::vector<IEPGroup> groups;  // 多个联通块的分割情况和系数
 
     void output() const {
         std::cout << "IEPHelperInfo: " << std::endl;
-        std::cout << "suffix_num: " << suffix_num << std::endl;
+        std::cout << "iep_suffix_vertexes: " << iep_suffix_vertexes
+                  << std::endl;
         std::cout << "groups: " << std::endl;
         for (const auto &group : groups) {
             group.output();
@@ -268,11 +269,12 @@ struct IEPHelperInfo {
     }
 };
 
-void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
-                    int suffix_num, std::vector<IEPGroup> &groups,
-                    const std::vector<std::pair<int, int>> &graph_cnt) {
+constexpr void get_iep_groups(
+    int depth, std::vector<int> &id, int group_cnt, int iep_suffix_vertexes,
+    std::vector<IEPGroup> &groups,
+    const std::vector<std::pair<int, int>> &graph_cnt) {
     // 边界
-    if (depth == suffix_num) {
+    if (depth == iep_suffix_vertexes) {
         std::vector<int> group_size(group_cnt, 0);
         for (auto g_id : id) {
             group_size[g_id]++;
@@ -292,7 +294,7 @@ void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
         std::vector<std::vector<int>> group{};
         for (int group_id = 0; group_id < group_cnt; group_id++) {
             std::vector<int> cur;
-            for (int v_id = 0; v_id < suffix_num; v_id++) {
+            for (int v_id = 0; v_id < iep_suffix_vertexes; v_id++) {
                 if (id[v_id] == group_id) cur.push_back(v_id);
             }
             group.push_back(cur);
@@ -305,41 +307,38 @@ void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
     // 递归
     // 分出来一个新类
     id[depth] = group_cnt;
-    get_iep_groups(depth + 1, id, group_cnt + 1, suffix_num, groups, graph_cnt);
+    get_iep_groups(depth + 1, id, group_cnt + 1, iep_suffix_vertexes, groups,
+                   graph_cnt);
 
     // 仍然分到老的类里面去
     for (int i = 0; i < group_cnt; i++) {
         id[depth] = i;
-        get_iep_groups(depth + 1, id, group_cnt, suffix_num, groups, graph_cnt);
+        get_iep_groups(depth + 1, id, group_cnt, iep_suffix_vertexes, groups,
+                       graph_cnt);
     }
 }
 
+// 计算 IEP 所需要的系数的信息
 constexpr IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
-    int iep_suffix_num = get_iep_suffix_num(p);
-    if (iep_suffix_num <= 1) {
-        // 无法使用
-        return IEPHelperInfo{0, {}};
-    } else {
-        // 可以使用 IEP, 提前计算一些系数的信息
+    int iep_suffix_vertexes = get_iep_suffix_vertexes(p);
 
-        // 单个连通块的情况
-        std::vector<std::pair<int, int>> graph_cnt_by_edges =
-            calculate_graph_cnt(iep_suffix_num);
+    // 单个连通块的情况
+    std::vector<std::pair<int, int>> graph_cnt_by_edges =
+        calculate_graph_cnt(iep_suffix_vertexes);
 
-        std::vector<VIndex_t> id(iep_suffix_num);
+    std::vector<VIndex_t> id(iep_suffix_vertexes);
 
-        std::vector<IEPGroup> groups;
+    std::vector<IEPGroup> groups;
 
-        // 多个连通块的情况
-        get_iep_groups(0, id, 0, iep_suffix_num, groups, graph_cnt_by_edges);
+    // 多个连通块的情况
+    get_iep_groups(0, id, 0, iep_suffix_vertexes, groups, graph_cnt_by_edges);
 
-        return IEPHelperInfo{iep_suffix_num, groups};
-    }
+    return IEPHelperInfo{iep_suffix_vertexes, groups};
 }
 
 class Schedule {
   public:
-    int suffix_num;
+    int iep_suffix_vertexes;
     int basic_vertexes;
     int total_prefix_num;
     std::vector<Prefix> prefixs;
@@ -429,13 +428,13 @@ class Schedule {
         IEPHelperInfo helper_info = generate_iep_helper_info(p);
         helper_info.output();
 
-        this->basic_vertexes = p.v_cnt() - helper_info.suffix_num;
-        this->suffix_num = helper_info.suffix_num;
+        this->basic_vertexes = p.v_cnt() - helper_info.iep_suffix_vertexes;
+        this->iep_suffix_vertexes = helper_info.iep_suffix_vertexes;
 
         // 构建主 Schedule
 
         // 构建 basic_prefix，也就是不考虑 iep 情况下的 prefix。
-        for (int i = 0; i < p.v_cnt(); i++) {
+        for (int i = 0; i < this->basic_vertexes; i++) {
             std::vector<int> tmp_data;
             for (int j = 0; j < i; j++) {
                 if (p.has_edge(i, j)) {
@@ -449,7 +448,8 @@ class Schedule {
             const auto &group = helper_info.groups[rank].group;
             const auto &coef = helper_info.groups[rank].coef;
 
-            const VIndex_t suffix_base = p.v_cnt() - helper_info.suffix_num;
+            const VIndex_t suffix_base =
+                p.v_cnt() - helper_info.iep_suffix_vertexes;
 
             for (int sg_id = 0; sg_id < group.size(); sg_id++) {
                 const auto &sub_group = group[sg_id];
@@ -605,7 +605,7 @@ struct IEPData {
 
 // data class, used for data transmission
 struct ScheduleData {
-    int suffix_num;
+    int iep_suffix_vertexes;
     int basic_vertexes;
     int total_prefix_num;
     Prefix prefixes[MAX_PREFIXS];
@@ -616,7 +616,7 @@ struct ScheduleData {
     constexpr ScheduleData(const Schedule &schedule)
         : basic_vertexes(schedule.basic_vertexes),
           total_prefix_num(schedule.total_prefix_num),
-          suffix_num(schedule.suffix_num),
+          iep_suffix_vertexes(schedule.iep_suffix_vertexes),
           iep_data(schedule.iep_info) {
         for (int i = 0; i < schedule.prefixs.size(); i++) {
             prefixes[i] = schedule.prefixs[i];

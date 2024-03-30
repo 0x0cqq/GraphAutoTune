@@ -22,12 +22,12 @@ TEST_CASE("Graph Cnt Calculate", "[graph cnt]") {
 }
 
 TEST_CASE("Generate IEP Group Info Test", "[iep group]") {
-    const int iep_suffix_num = 5;
-    const auto graph_cnt = Core::calculate_graph_cnt(iep_suffix_num);
+    const int iep_suffix_vertexes = 5;
+    const auto graph_cnt = Core::calculate_graph_cnt(iep_suffix_vertexes);
 
-    std::vector<VIndex_t> id(iep_suffix_num);
+    std::vector<VIndex_t> id(iep_suffix_vertexes);
     std::vector<Core::IEPGroup> groups;
-    get_iep_groups(0, id, 0, iep_suffix_num, groups, graph_cnt);
+    get_iep_groups(0, id, 0, iep_suffix_vertexes, groups, graph_cnt);
 
     // 打印所有的组合
     for (const auto &group : groups) {
