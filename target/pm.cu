@@ -12,7 +12,7 @@ constexpr Config default_config{};
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         // too few arguments
-        std::cout << "Too few arguments" << std::endl;
+        std::cerr << "Too few arguments" << std::endl;
         return 1;
     }
     std::string graph_name{argv[1]};
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     // 数据图
     std::ifstream graph_file{PROJECT_ROOT / graph_name};
     if (!graph_file.is_open()) {
-        std::cout << "Cannot open the graph file" << std::endl;
+        std::cerr << "Cannot open the graph file" << std::endl;
         return 1;
     }
     // 模式图
@@ -51,7 +51,18 @@ int main(int argc, char* argv[]) {
     // 3. 进行 Match
     std::cout << "Enter the Search..." << std::endl;
 
+    auto time_start = std::chrono::high_resolution_clock::now();
+
     unsigned long long ans = engine.perform_search(context);
+
+    auto time_end = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        time_end - time_start)
+                        .count();
+
+    std::cout << "Time: " << duration << " microseconds ("
+              << double(duration) / 100000 << " s)" << std::endl;
 
     // 4. 输出结果
 

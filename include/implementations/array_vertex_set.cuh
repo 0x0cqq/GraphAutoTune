@@ -9,6 +9,7 @@
 #include "configs/config.hpp"
 #include "configs/gpu_consts.cuh"
 #include "core/types.hpp"
+#include "core/unordered_vertex_set.cuh"
 
 namespace GPU {
 
@@ -62,25 +63,13 @@ class ArrayVertexSet {
 
     __device__ size_t storage_space() const { return _allocated_size; }
 
+    template <int depth, size_t SIZE>
+    __device__ VIndex_t
+    subtraction_size_single_thread(const Core::UnorderedVertexSet<SIZE>& set);
+
     // 对 Output 没有任何假设，除了空间是够的之外。
     // TODO: 或可以用 __restrict__ 修饰符加速
     __device__ void intersect(const ArrayVertexSet& a, const ArrayVertexSet& b);
-
-    // 提供一个遍历的接口，但是具体的操作是通过 nvstd::function 函子传进来的。
-    // 我们会让整个 Warp 一起调用这个 f。
-    __device__ void foreach_vertex(
-        const nvstd::function<void(VIndex_t, size_t)>& f) const {
-        const int bid = blockIdx.x;
-        const int wid = threadIdx.x / THREADS_PER_WARP;
-        const int global_wid = bid * WARPS_PER_BLOCK + wid;
-
-        for (int base = 0; base < _size; base += num_total_warps) {
-            int index = base + global_wid;
-            if (index < _size) {
-                f(_data[index], index);
-            }
-        }
-    }
 };
 
 }  // namespace GPU
@@ -205,6 +194,20 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
                                                   const ArrayVertexSet& b) {
     this->_size = do_intersection_dispatcher<config>(
         this->data(), a.data(), b.data(), a.size(), b.size());
+}
+
+template <Config config>
+template <int depth, size_t SIZE>
+__device__ VIndex_t ArrayVertexSet<config>::subtraction_size_single_thread(
+    const Core::UnorderedVertexSet<SIZE>& set) {
+    // 这是只有一个线程的 version
+    int ans = 0;
+    for (int i = 0; i < depth; i++) {
+        if (search_dispatcher<config>(set.get(i), _data, _size)) {
+            ans++;
+        }
+    }
+    return _size - ans;
 }
 
 }  // namespace GPU

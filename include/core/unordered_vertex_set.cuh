@@ -18,6 +18,8 @@ class UnorderedVertexSet {
         _data[pos] = val;
     }
 
+    __device__ VIndex_t get(size_t pos) const { return _data[pos]; }
+
     __device__ void clear() {
         const int lid = threadIdx.x % THREADS_PER_WARP;
         if (lid < SIZE) _data[lid] = -1;
@@ -29,7 +31,7 @@ class UnorderedVertexSet {
     }
 
     template <size_t N>
-    __device__ bool has_data(VIndex_t val) {
+    __device__ bool has_data(VIndex_t val) const {
         const int lid = threadIdx.x % THREADS_PER_WARP;
         bool result = (lid < N) && (_data[lid] == val);
         return __any_sync(0xFFFFFFFF, result);

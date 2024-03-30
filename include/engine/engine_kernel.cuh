@@ -174,12 +174,22 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
         VertexSet &new_vertex_set = new_vertex_sets[warp_id];
         new_vertex_set.init(neighbors, neighbors_cnt);
 
+        const auto &cur_subtraction_set =
+            cur_v_storage.subtraction_set[cur_level_uid];
+
+        bool appeared = cur_subtraction_set.has_data<cur_pattern_vid + 1>(v);
+
         // 构建所有 prefix 对应的 p_storage
         for (int cur_prefix_id = start_prefix_id; cur_prefix_id < end_prefix_id;
              cur_prefix_id++) {
             // 找到下一层的 Storage Unit
             auto &next_vertex_set =
                 p_storages[cur_prefix_id].vertex_set[next_extend_uid];
+
+            if (appeared) {
+                next_vertex_set.clear();
+                continue;
+            }
 
             // 找到 father prefix id
             int father_prefix_id =
@@ -202,8 +212,11 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
         }
 
         // 构造 subtraction_set
+        next_v_storage.subtraction_set[next_extend_uid].copy(
+            cur_subtraction_set);
         if (lane_id == 0) {
-            next_v_storage.subtraction_set[next_extend_uid].set<0>(v);
+            next_v_storage.subtraction_set[next_extend_uid]
+                .set<cur_pattern_vid + 1>(v);
         }
     }
 }
@@ -284,7 +297,10 @@ __global__ void get_iep_answer(DeviceContext<config> context,
             int father_uid = find_father_uid<config, cur_pattern_vid>(
                 context, v_storages, this_prefix_id, uid);
             ans[prefix_id_x] =
-                p_storages[this_prefix_id].vertex_set[father_uid].size();
+                p_storages[this_prefix_id]
+                    .vertex_set[father_uid]
+                    .subtraction_size_single_thread<cur_pattern_vid>(
+                        last_v_storage.subtraction_set[uid]);
         }
 
         unsigned long long val = 1;

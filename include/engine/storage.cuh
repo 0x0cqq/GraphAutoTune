@@ -16,7 +16,7 @@
 namespace Engine {
 
 constexpr int MAX_SET_SIZE = 200;  // 每个 Set 最多 x 个数
-constexpr int NUMS_UNIT = 100000;  // y 个 Vertex Set
+constexpr int NUMS_UNIT = 1000;   // y 个 Vertex Set
 
 template <Config config>
 class VertexStorage {
