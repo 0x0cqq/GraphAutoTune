@@ -258,8 +258,15 @@ __host__ bool Executor<config>::extend() {
     // cur_pattern_vid + 1 位置总共有这么多 Unit
     vertex_storages[cur_pattern_vid + 1].num_units = *total_units;
 #ifndef NDEBUG
-    std::cout << "Extend range: [" << cur_unit << "," << *end_unit << ")"
-              << std::endl;
+    // thrust::device_ptr<VIndex_t> d_ptr(
+    //     vertex_storages[cur_pattern_vid].unit_extend_sum);
+
+    // VIndex_t start = d_ptr[cur_unit - 1], end = d_ptr[*end_unit - 1];
+
+    std::cout << "Extend range: [" << cur_unit << "," << *end_unit
+              << "), total next level units:" << *total_units << std::endl;
+    //   << "start: " << start << ", end: " << end << std::endl;
+
 #endif
     extend_p_storage<config, cur_pattern_vid>
         <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,

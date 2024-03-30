@@ -274,11 +274,10 @@ __global__ void get_iep_answer(DeviceContext<config> context,
 
     unsigned long long ans[MAX_PREFIXS];
 
-    unsigned long long local_ans = 0;
-
     for (int base = 0; base < num_units; base += num_threads) {
         int uid = base + global_tid;
         if (uid >= num_units) continue;
+        unsigned long long local_ans = 0;
         for (int prefix_id_x = 0; prefix_id_x < iep_prefix_num; prefix_id_x++) {
             int this_prefix_id = iep_data.iep_vertex_id[prefix_id_x];
             // 需要获得 prefix_id 的 uid
