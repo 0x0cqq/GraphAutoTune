@@ -74,7 +74,7 @@ class Executor {
         for (int i = 0; i < MAX_PREFIXS; i++) {
             prefix_storages[i].init();
             // 给 prefix storage 里面的 vertex set 分配内存空间
-            set_vertex_set_space<config>
+            set_vertex_set_space_kernel<config>
                 <<<num_blocks, THREADS_PER_BLOCK>>>(prefix_storages[i]);
         }
         for (int i = 0; i < MAX_VERTEXES; i++) {
@@ -218,9 +218,8 @@ __host__ void Executor<config>::prepare() {
 #endif
 
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
-    prepare_v_storage<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
-                                            vertex_storages);
+    prepare_v_storage<config, cur_pattern_vid>(*device_context, prefix_storages,
+                                               vertex_storages);
 
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
@@ -262,8 +261,9 @@ __host__ bool Executor<config>::extend() {
     // cur_unit: cur_level 当前 extend 开始的 Unit
     int cur_unit = cur_progress[cur_pattern_vid];
 
-    get_next_unit<config><<<1, 1>>>(cur_unit, end_unit, total_units, NUMS_UNIT,
-                                    vertex_storages[cur_pattern_vid]);
+    get_next_unit_kernel<config><<<1, 1>>>(cur_unit, end_unit, total_units,
+                                           NUMS_UNIT,
+                                           vertex_storages[cur_pattern_vid]);
 
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
@@ -290,11 +290,10 @@ __host__ bool Executor<config>::extend() {
 
 #endif
 
-    extend_v_storage<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
-                                            vertex_storages, cur_unit,
-                                            *end_unit);
-    extend_p_storage<config, cur_pattern_vid>
+    extend_v_storage<config, cur_pattern_vid>(
+        *device_context, prefix_storages, vertex_storages, cur_unit, *end_unit);
+
+    extend_p_storage_kernel<config, cur_pattern_vid>
         <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
                                             vertex_storages, cur_unit,
                                             *end_unit);
@@ -330,8 +329,9 @@ __host__ void Executor<config>::final_step() {
     const auto &last_v_storage =
         vertex_storages[device_context->schedule_data.basic_vertexes - 1];
 
-    get_iep_answer<config, cur_pattern_vid><<<num_blocks, THREADS_PER_BLOCK>>>(
-        *device_context, prefix_storages, vertex_storages, d_ans);
+    get_iep_answer_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
+                                            vertex_storages, d_ans);
 
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());

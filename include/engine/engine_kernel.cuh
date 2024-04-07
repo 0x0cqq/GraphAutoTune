@@ -13,7 +13,7 @@ namespace Engine {
 
 // space 是单独开的，需要再分给 vertex set 里面的 pointer
 template <Config config>
-__global__ void set_vertex_set_space(PrefixStorage<config> p_storage) {
+__global__ void set_vertex_set_space_kernel(PrefixStorage<config> p_storage) {
     const int wid = threadIdx.x / 32;
     const int global_wid = blockIdx.x * WARPS_PER_BLOCK + wid;
 
@@ -96,16 +96,15 @@ __device__ VIndex_t find_prev_index(VIndex_t *sum, int l, int r,
 }
 
 template <Config config, int cur_pattern_vid>
-__global__ void extend_v_storage(const DeviceContext<config> context,
-                                 PrefixStorages<config> p_storages,
-                                 VertexStorages<config> v_storages,
-                                 int start_uid, int end_uid) {
+__global__ void extend_v_storage_kernel(const DeviceContext<config> context,
+                                        PrefixStorage<config> loop_set_storage,
+                                        int loop_set_prefix_id,
+                                        VertexStorage<config> cur_v_storage,
+                                        VertexStorage<config> next_v_storage,
+                                        int start_uid, int end_uid) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     const int global_tid = blockIdx.x * blockDim.x + threadIdx.x;
     const int num_threads = gridDim.x * blockDim.x;
-
-    const auto &cur_v_storage = v_storages[cur_pattern_vid];
-    const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
 
     int start_extend_unit_id =
         start_uid == 0 ? 0 : cur_v_storage.unit_extend_sum[start_uid - 1];
@@ -137,11 +136,6 @@ __global__ void extend_v_storage(const DeviceContext<config> context,
                              : cur_v_storage.unit_extend_sum[cur_level_uid - 1];
         int vertex_index = uid_in_total - base_index;
 
-        // 下一个点的 loop_set_prefix_id
-        const int loop_set_prefix_id =
-            context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
-        const auto &loop_set_storage = p_storages[loop_set_prefix_id];
-
         // 找到 next_uid 在 loop_set_vertex_id 层的 uid
         int loop_set_uid = find_prefix_level_uid<config>(
             context, next_v_storage, loop_set_prefix_id, next_extend_uid);
@@ -161,13 +155,32 @@ __global__ void extend_v_storage(const DeviceContext<config> context,
     }
 }
 
+template <Config config, int cur_pattern_vid>
+void extend_v_storage(const DeviceContext<config> context,
+                      PrefixStorages<config> p_storages,
+                      VertexStorages<config> v_storages, int start_uid,
+                      int end_uid) {
+    const auto &cur_v_storage = v_storages[cur_pattern_vid];
+    const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
+
+    // 下一个点的 loop_set_prefix_id
+    const int loop_set_prefix_id =
+        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
+    const auto &loop_set_storage = p_storages[loop_set_prefix_id];
+
+    extend_v_storage_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, loop_set_storage,
+                                            loop_set_prefix_id, cur_v_storage,
+                                            next_v_storage, start_uid, end_uid);
+}
+
 // 设置 v_storage[cur_pattern_vid] 的 prev_uid, subtraction_set
 // 设置 p_storage[(cur_pattern_vid + 1) --> prefix_id] 的 vertex_set
 template <Config config, int cur_pattern_vid>
-__global__ void extend_p_storage(const DeviceContext<config> context,
-                                 PrefixStorages<config> p_storages,
-                                 VertexStorages<config> v_storages,
-                                 int start_uid, int end_uid) {
+__global__ void extend_p_storage_kernel(const DeviceContext<config> context,
+                                        PrefixStorages<config> p_storages,
+                                        VertexStorages<config> v_storages,
+                                        int start_uid, int end_uid) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     __shared__ VertexSet new_vertex_sets[WARPS_PER_BLOCK];
 
@@ -278,37 +291,52 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
 }
 
 // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
+// p_storage 是对应 loop_set_prefix_id 位置的 Prefix
 template <Config config, int cur_pattern_vid>
-__global__ void prepare_v_storage(const DeviceContext<config> context,
-                                  PrefixStorages<config> prefix_storages,
-                                  VertexStorages<config> vertex_storages) {
-    const auto &v_storage = vertex_storages[cur_pattern_vid];
+__global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
+                                         PrefixStorage<config> p_storage,
+                                         VertexStorage<config> v_storage,
+                                         int loop_set_prefix_id) {
     const int num_units = v_storage.num_units;
     assert(num_units != 0);
+
     const int bid = blockIdx.x, tid = threadIdx.x;
     const int global_tid = bid * blockDim.x + tid;
     const int num_threads = gridDim.x * blockDim.x;
     // 对于每一个本层的 Unit
+    // 构建 loop_set_unit 的 size
     for (int base = 0; base < num_units; base += num_threads) {
         int uid = base + global_tid;
         if (uid >= num_units) continue;
-        // 构建 loop_set_unit 的 size
-        int loop_set_prefix_id =
-            context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
         // 找到本层的 unit 在 loop_set_vertex_id 层的 uid
         int loop_set_uid = find_prefix_level_uid<config>(
             context, v_storage, loop_set_prefix_id, uid);
         // printf("uid: %d loop set uid: %d\n", uid, loop_set_uid);
         // 将 uid 位置的 set 写入 unit_extend_size
         v_storage.unit_extend_size[uid] =
-            prefix_storages[loop_set_prefix_id].vertex_set[loop_set_uid].size();
+            p_storage.vertex_set[loop_set_uid].size();
     }
 }
 
+template <Config config, int cur_pattern_vid>
+void prepare_v_storage(DeviceContext<config> &context,
+                       PrefixStorages<config> &prefix_storages,
+                       VertexStorages<config> &vertex_storages) {
+    const auto &v_storage = vertex_storages[cur_pattern_vid];
+
+    int loop_set_prefix_id =
+        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
+    const auto &p_storage = prefix_storages[loop_set_prefix_id];
+
+    prepare_v_storage_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, p_storage, v_storage,
+                                            loop_set_prefix_id);
+}
+
 template <Config config>
-__global__ void get_next_unit(int current_unit, int *next_unit,
-                              int *next_total_units, int num_units,
-                              VertexStorage<config> v_storage) {
+__global__ void get_next_unit_kernel(int current_unit, int *next_unit,
+                                     int *next_total_units, int num_units,
+                                     VertexStorage<config> v_storage) {
     VIndex_t current_unit_size =
         current_unit == 0 ? 0 : v_storage.unit_extend_sum[current_unit - 1];
     VIndex_t next_size = current_unit_size + num_units;
@@ -323,10 +351,10 @@ __global__ void get_next_unit(int current_unit, int *next_unit,
 
 // 按照 IEP Info 的提示去计算出每一个 Unit 对应的答案，放到某个数组里面
 template <Config config, int cur_pattern_vid>
-__global__ void get_iep_answer(DeviceContext<config> context,
-                               PrefixStorages<config> p_storages,
-                               VertexStorages<config> v_storages,
-                               unsigned long long *d_ans) {
+__global__ void get_iep_answer_kernel(DeviceContext<config> context,
+                                      PrefixStorages<config> p_storages,
+                                      VertexStorages<config> v_storages,
+                                      unsigned long long *d_ans) {
     // per-thread 去处理 Unit
     const int thread_id = threadIdx.x, block_id = blockIdx.x;
     const int global_tid = block_id * blockDim.x + thread_id;
