@@ -43,7 +43,8 @@ class VertexStorage {
             gpuErrchk(cudaMalloc(
                 &subtraction_set,
                 sizeof(Core::UnorderedVertexSet<MAX_VERTEXES>) * NUMS_UNIT));
-            gpuErrchk(cudaMalloc(&prev_uid, sizeof(int) * NUMS_UNIT));
+            gpuErrchk(
+                cudaMalloc(&prev_uid, sizeof(int) * NUMS_UNIT * MAX_VERTEXES));
             gpuErrchk(
                 cudaMalloc(&unit_extend_size, sizeof(VIndex_t) * NUMS_UNIT));
             gpuErrchk(
@@ -60,7 +61,7 @@ class VertexStorage {
         } else if (device_type == DeviceType::CPU_DEVICE) {
             subtraction_set =
                 new Core::UnorderedVertexSet<MAX_VERTEXES>[NUMS_UNIT];
-            prev_uid = new int[NUMS_UNIT];
+            prev_uid = new int[NUMS_UNIT * MAX_VERTEXES];
             unit_extend_size = new VIndex_t[NUMS_UNIT];
             unit_extend_sum = new VIndex_t[NUMS_UNIT];
 

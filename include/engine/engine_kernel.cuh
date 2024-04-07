@@ -47,20 +47,19 @@ __global__ void first_extend_kernel(DeviceContext<config> context,
         p_storage.vertex_set[uid].init_copy(neighbors, neighbors_cnt);
         if (lane_id == 0) {
             v_storage.subtraction_set[uid].set<0>(vid);
+            v_storage.prev_uid[uid * MAX_VERTEXES + 0] = uid;
         }
     }
 }
 
 // 找到在 v_storages[curr_pattern_vid][uid] 在 father_pattern_id 深度的 father
 // 可以每个 thread（而非 Warp） 找一个不同的 uid
+// 边界情况：father_pattern_vid == cur_pattern_vid? 返回 uid
+// 边界情况：father_pattern_vid == 0？不能越界
 template <Config config>
-__device__ int find_father(int cur_pattern_vid, int father_pattern_vid,
-                           VertexStorages<config> &vertex_storages, int uid) {
-    int cur_uid = uid;
-    for (int i = cur_pattern_vid; i > father_pattern_vid; --i) {
-        cur_uid = vertex_storages[i].prev_uid[cur_uid];
-    }
-    return cur_uid;
+__device__ int find_father(int father_pattern_vid,
+                           const VertexStorage<config> &v_storage, int uid) {
+    return v_storage.prev_uid[uid * MAX_VERTEXES + father_pattern_vid];
 }
 
 // 我们希望知道某个 prefix id 是属于哪个 vertex，其实就是最后一个vertex 是什么
@@ -71,22 +70,12 @@ __device__ int from_prefix_id_to_vertex_id(const DeviceContext<config> &context,
     return prefix.data[prefix.depth - 1];
 }
 
-template <Config config, int cur_pattern_vid>
-__device__ int find_loop_set_uid(const DeviceContext<config> &context,
-                                 VertexStorages<config> &v_storages,
-                                 int loop_set_prefix_id, int uid) {
-    int loop_set_vertex_id =
-        from_prefix_id_to_vertex_id(context, loop_set_prefix_id);
-    return find_father(cur_pattern_vid, loop_set_vertex_id, v_storages, uid);
-}
-
-template <Config config, int cur_pattern_vid>
-__device__ int find_father_uid(const DeviceContext<config> &context,
-                               VertexStorages<config> &v_storages,
-                               int father_prefix_id, int uid) {
-    int father_vertex_id =
-        from_prefix_id_to_vertex_id(context, father_prefix_id);
-    return find_father(cur_pattern_vid, father_vertex_id, v_storages, uid);
+template <Config config>
+__device__ int find_prefix_level_uid(const DeviceContext<config> &context,
+                                     const VertexStorage<config> &v_storage,
+                                     int prefix_id, int uid) {
+    int vertex_id = from_prefix_id_to_vertex_id(context, prefix_id);
+    return find_father(vertex_id, v_storage, uid);
 }
 
 __device__ VIndex_t find_prev_index(VIndex_t *sum, int l, int r,
@@ -165,8 +154,16 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
             find_prev_index(cur_v_storage.unit_extend_sum, start_uid,
                             end_uid - 1, uid_in_total);
 
-        // 建立反查的链接
-        next_v_storage.prev_uid[next_extend_uid] = cur_level_uid;
+        // copy 过来父亲链
+        if (lane_id <= cur_pattern_vid)
+            next_v_storage.prev_uid[next_extend_uid * MAX_VERTEXES + lane_id] =
+                cur_v_storage.prev_uid[cur_level_uid * MAX_VERTEXES + lane_id];
+        if (lane_id == 0) {
+            next_v_storage.prev_uid[next_extend_uid * MAX_VERTEXES +
+                                    cur_pattern_vid + 1] = next_extend_uid;
+        }
+
+        __threadfence_block();
 
         // 找到 Vertex 在 set 中的 Index
         int base_index = cur_level_uid == 0
@@ -175,8 +172,8 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
         int vertex_index = uid_in_total - base_index;
 
         // 找到 next_uid 在 loop_set_vertex_id 层的 uid
-        int loop_set_uid = find_loop_set_uid<config, cur_pattern_vid + 1>(
-            context, v_storages, loop_set_prefix_id, next_extend_uid);
+        int loop_set_uid = find_prefix_level_uid<config>(
+            context, next_v_storage, loop_set_prefix_id, next_extend_uid);
 
         // vertex set + index 获取 vertex_id
         VIndex_t v =
@@ -219,9 +216,8 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
                 const auto &father_prefix =
                     context.schedule_data.prefixes[father_prefix_id];
 
-                int father_unit_id =
-                    find_father_uid<config, cur_pattern_vid + 1>(
-                        context, v_storages, father_prefix_id, next_extend_uid);
+                int father_unit_id = find_prefix_level_uid<config>(
+                    context, next_v_storage, father_prefix_id, next_extend_uid);
                 const auto &father_vertex_set =
                     father_vertex_set_shared[index][father_unit_id];
                 next_vertex_set.intersect(new_vertex_set, father_vertex_set);
@@ -257,8 +253,8 @@ __global__ void extend_v_storage(const DeviceContext<config> context,
         int loop_set_prefix_id =
             context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
         // 找到本层的 unit 在 loop_set_vertex_id 层的 uid
-        int loop_set_uid = find_loop_set_uid<config, cur_pattern_vid>(
-            context, vertex_storages, loop_set_prefix_id, uid);
+        int loop_set_uid = find_prefix_level_uid<config>(
+            context, v_storage, loop_set_prefix_id, uid);
         // printf("uid: %d loop set uid: %d\n", uid, loop_set_uid);
         // 将 uid 位置的 set 写入 unit_extend_size
         v_storage.unit_extend_size[uid] =
@@ -311,8 +307,8 @@ __global__ void get_iep_answer(DeviceContext<config> context,
         for (int prefix_id_x = 0; prefix_id_x < iep_prefix_num; prefix_id_x++) {
             int this_prefix_id = iep_data.iep_vertex_id[prefix_id_x];
             // 需要获得 prefix_id 的 uid
-            int father_uid = find_father_uid<config, cur_pattern_vid>(
-                context, v_storages, this_prefix_id, uid);
+            int father_uid = find_prefix_level_uid<config>(
+                context, last_v_storage, this_prefix_id, uid);
             ans[prefix_id_x] =
                 p_storages[this_prefix_id]
                     .vertex_set[father_uid]
