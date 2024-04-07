@@ -218,7 +218,7 @@ __host__ void Executor<config>::prepare() {
 #endif
 
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
-    extend_v_storage<config, cur_pattern_vid>
+    prepare_v_storage<config, cur_pattern_vid>
         <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
                                             vertex_storages);
 
@@ -289,6 +289,11 @@ __host__ bool Executor<config>::extend() {
     //   << "start: " << start << ", end: " << end << std::endl;
 
 #endif
+
+    extend_v_storage<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
+                                            vertex_storages, cur_unit,
+                                            *end_unit);
     extend_p_storage<config, cur_pattern_vid>
         <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
                                             vertex_storages, cur_unit,

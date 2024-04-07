@@ -30,6 +30,13 @@ class UnorderedVertexSet {
         if (lid < SIZE) _data[lid] = other._data[lid];
     }
 
+    __device__ void copy_single_thread(const UnorderedVertexSet<SIZE>& other) {
+#pragma unroll
+        for (size_t i = 0; i < SIZE; i++) {
+            _data[i] = other._data[i];
+        }
+    }
+
     template <size_t N>
     __device__ bool has_data(VIndex_t val) const {
         const int lid = threadIdx.x % THREADS_PER_WARP;
