@@ -17,7 +17,8 @@ int main(int argc, char *argv[]) {
         M = 100;
     }
 
-    bool adj[N][N];
+    bool **adj = new bool *[N];
+    for (int i = 0; i < N; i++) adj[i] = new bool[N];
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) adj[i][j] = false;
     }

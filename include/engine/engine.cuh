@@ -1,4 +1,5 @@
 #pragma once
+#include <nvtx3/nvToolsExt.h>
 #include <thrust/device_ptr.h>
 
 #include <array>
@@ -31,6 +32,15 @@ class Executor {
 
     // 用于 IEP 的临时存储
     unsigned long long *d_ans;
+
+    // 用于 cub device prefix 的空间
+    void *d_prefix_temp_storage = nullptr;
+    size_t temp_storage_bytes = 0;
+
+    // 用于更新下一层的 Unit 的信息
+    // end_unit: cur_level 的结束
+    // total_units: 下一层总共会有多少 units
+    int *end_unit, *total_units;
 
     // 存储一些恒定的 Context，例如 Schedule 和 Graph Backend
     DeviceContext<config> *device_context;
@@ -73,6 +83,16 @@ class Executor {
 
         gpuErrchk(cudaMalloc(&d_ans, sizeof(unsigned long long) * NUMS_UNIT));
 
+        // 准备前缀和空间
+        VIndex_t *temp = nullptr;
+        gpuErrchk(cub::DeviceScan::InclusiveSum(
+            d_prefix_temp_storage, temp_storage_bytes, temp, temp, NUMS_UNIT));
+        gpuErrchk(cudaMalloc(&d_prefix_temp_storage, temp_storage_bytes));
+
+        // 为了更新下一层的 Unit 信息
+        gpuErrchk(cudaMallocManaged(&end_unit, sizeof(int)));
+        gpuErrchk(cudaMallocManaged(&total_units, sizeof(int)));
+
         gpuErrchk(cudaDeviceSynchronize());
 
 #ifndef NDEBUG
@@ -89,6 +109,10 @@ class Executor {
         }
 
         gpuErrchk(cudaFree(d_ans));
+        gpuErrchk(cudaFree(d_prefix_temp_storage));
+
+        gpuErrchk(cudaFree(end_unit));
+        gpuErrchk(cudaFree(total_units));
     }
 
     __host__ void set_context(DeviceContext<config> &context) {
@@ -96,22 +120,11 @@ class Executor {
     }
 
     __host__ void do_extend_size_sum(VertexStorage<config> &v_storage) {
-        int num_units = v_storage.num_units;
-        void *d_temp_storage = nullptr;
-        size_t temp_storage_bytes = 0;
-        gpuErrchk(cub::DeviceScan::InclusiveSum(
-            d_temp_storage, temp_storage_bytes, v_storage.unit_extend_size,
-            v_storage.unit_extend_sum, num_units));
-
-        // Allocate temporary storage for inclusive prefix sum
-        gpuErrchk(cudaMalloc(&d_temp_storage, temp_storage_bytes));
-
         // Run inclusive prefix sum
         gpuErrchk(cub::DeviceScan::InclusiveSum(
-            d_temp_storage, temp_storage_bytes, v_storage.unit_extend_size,
-            v_storage.unit_extend_sum, num_units));
-
-        gpuErrchk(cudaFree(d_temp_storage));
+            d_prefix_temp_storage, temp_storage_bytes,
+            v_storage.unit_extend_size, v_storage.unit_extend_sum,
+            v_storage.num_units));
     }
 
     __host__ unsigned long long perform_search(DeviceContext<config> &context);
@@ -180,6 +193,7 @@ __host__ void Executor<config>::search() {
             search<cur_pattern_vid + 1>();
         }
     }
+
 #ifndef NDEBUG
     auto time_end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -197,7 +211,10 @@ template <int cur_pattern_vid>
 __host__ void Executor<config>::prepare() {
 #ifndef NDEBUG
     auto start = std::chrono::high_resolution_clock::now();
-    std::cout << "Level " << cur_pattern_vid << ": enter prepare." << std::endl;
+    if (cur_pattern_vid < LOG_DEPTH) {
+        std::cout << "Level " << cur_pattern_vid << ": enter prepare."
+                  << std::endl;
+    }
 #endif
 
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
@@ -214,17 +231,20 @@ __host__ void Executor<config>::prepare() {
     do_extend_size_sum(v_storage);
 
 #ifndef NDEBUG
-    thrust::device_ptr<VIndex_t> unit_extend_size(v_storage.unit_extend_size);
-    std::cout << "Units extend size: ";
-    for (int i = 0; i < v_storage.num_units; i++) {
-        std::cout << unit_extend_size[i] << " ";
+    if (cur_pattern_vid < LOG_DEPTH) {
+        thrust::device_ptr<VIndex_t> unit_extend_size(
+            v_storage.unit_extend_size);
+        std::cout << "Units extend size: ";
+        for (int i = 0; i < v_storage.num_units; i++) {
+            std::cout << unit_extend_size[i] << " ";
+        }
+        std::cout << std::endl;
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << "Level " << cur_pattern_vid << ": leave prepare, time "
+                  << duration.count() << " ms" << std::endl;
     }
-    std::cout << std::endl;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Level " << cur_pattern_vid << ": leave prepare, time "
-              << duration.count() << " ms" << std::endl;
 #endif
 }
 
@@ -242,13 +262,9 @@ __host__ bool Executor<config>::extend() {
     // cur_unit: cur_level 当前 extend 开始的 Unit
     int cur_unit = cur_progress[cur_pattern_vid];
 
-    // end_unit: cur_level 的结束
-    // total_units: 下一层总共会有多少 units
-    int *end_unit, *total_units;
-    gpuErrchk(cudaMallocManaged(&end_unit, sizeof(int)));
-    gpuErrchk(cudaMallocManaged(&total_units, sizeof(int)));
     get_next_unit<config><<<1, 1>>>(cur_unit, end_unit, total_units, NUMS_UNIT,
                                     vertex_storages[cur_pattern_vid]);
+
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
 
@@ -258,13 +274,18 @@ __host__ bool Executor<config>::extend() {
     // cur_pattern_vid + 1 位置总共有这么多 Unit
     vertex_storages[cur_pattern_vid + 1].num_units = *total_units;
 #ifndef NDEBUG
+
     // thrust::device_ptr<VIndex_t> d_ptr(
     //     vertex_storages[cur_pattern_vid].unit_extend_sum);
 
     // VIndex_t start = d_ptr[cur_unit - 1], end = d_ptr[*end_unit - 1];
 
-    std::cout << "Extend range: [" << cur_unit << "," << *end_unit
-              << "), total next level units:" << *total_units << std::endl;
+    if (cur_pattern_vid < LOG_DEPTH) {
+        std::cout << "Level " << cur_pattern_vid << ": extend range: ["
+                  << cur_unit << "," << *end_unit
+                  << "), total next level units:" << *total_units << std::endl;
+    }
+
     //   << "start: " << start << ", end: " << end << std::endl;
 
 #endif
@@ -275,9 +296,6 @@ __host__ bool Executor<config>::extend() {
 
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
-
-    gpuErrchk(cudaFree(end_unit));
-    gpuErrchk(cudaFree(total_units));
 
 #ifndef NDEBUG
     auto time_end = std::chrono::high_resolution_clock::now();
@@ -297,8 +315,10 @@ template <int cur_pattern_vid>
 __host__ void Executor<config>::final_step() {
 #ifndef NDEBUG
     auto time_start = std::chrono::high_resolution_clock::now();
-    std::cout << "Level " << device_context->schedule_data.basic_vertexes
-              << ": enter final step" << std::endl;
+    if (cur_pattern_vid < LOG_DEPTH) {
+        std::cout << "Level " << device_context->schedule_data.basic_vertexes
+                  << ": enter final step" << std::endl;
+    }
 #endif
 
     // 这里是按照 IEP Info 的提示去计算出每一个 Unit 对应的答案，放到 d_ans 里面
@@ -323,9 +343,11 @@ __host__ void Executor<config>::final_step() {
     auto time_end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         time_end - time_start);
-    std::cout << "Level " << device_context->schedule_data.basic_vertexes
-              << ": leave final step, ans = " << this_ans << ", time "
-              << duration.count() << " ms" << std::endl;
+    if (cur_pattern_vid < LOG_DEPTH) {
+        std::cout << "Level " << device_context->schedule_data.basic_vertexes
+                  << ": leave final step, ans = " << this_ans << ", time "
+                  << duration.count() << " ms" << std::endl;
+    }
 #endif
 }
 }  // namespace Engine

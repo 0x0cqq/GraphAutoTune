@@ -3,6 +3,7 @@
 #include <concepts>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <vector>
 
 #include "configs/config.hpp"
@@ -21,12 +22,40 @@ class GlobalMemoryGraph {
 
     __host__ void build_from_text_file(std::ifstream &file) {
         file >> _v_cnt >> _e_cnt;
+
+        std::map<VIndex_t, VIndex_t> vertex_map;
+        std::vector<std::pair<VIndex_t, VIndex_t>> edges;
+        for (EIndex_t i = 0; i < _e_cnt; i++) {
+            VIndex_t u, v;
+            file >> u >> v;
+
+            edges.push_back(std::make_pair(u, v));
+            vertex_map[u] = vertex_map[v] = 0;
+        }
+
+        // 重新编号
+        if (_v_cnt != vertex_map.size()) {
+            std::cout << "Vertex Count Mismatch: " << _v_cnt << " vs "
+                      << vertex_map.size() << std::endl;
+        }
+        if (_v_cnt < vertex_map.size()) {
+            std::cout << "Vertex Count is less than appeared: " << _v_cnt
+                      << " vs " << vertex_map.size() << std::endl;
+            exit(1);
+        }
+        VIndex_t new_index = 0;
+        for (auto &it : vertex_map) {
+            it.second = new_index++;
+        }
+
         // 读取边
         std::vector<std::vector<VIndex_t>> edges_vec;
         edges_vec.resize(_v_cnt);
         for (EIndex_t i = 0; i < _e_cnt; i++) {
             VIndex_t u, v;
-            file >> u >> v;
+            u = vertex_map[edges[i].first];
+            v = vertex_map[edges[i].second];
+
             if (u == v) {
 #ifndef NDEBUG
                 std::cout << "Self loop detected: " << u << std::endl;

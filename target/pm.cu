@@ -1,4 +1,6 @@
 // 在 GPU 上进行 Pattern Matching.
+#include <nvtx3/nvToolsExt.h>
+
 #include <algorithm>
 
 #include "configs/project_consts.hpp"
@@ -53,7 +55,9 @@ int main(int argc, char* argv[]) {
 
     auto time_start = std::chrono::high_resolution_clock::now();
 
+    nvtxRangePush("Search");
     unsigned long long ans = engine.perform_search(context);
+    nvtxRangePop();
 
     auto time_end = std::chrono::high_resolution_clock::now();
 
@@ -62,7 +66,7 @@ int main(int argc, char* argv[]) {
                         .count();
 
     std::cout << "Time: " << duration << " microseconds ("
-              << double(duration) / 100000 << " s)" << std::endl;
+              << double(duration) / 1000000 << " s)" << std::endl;
 
     // 4. 输出结果
 

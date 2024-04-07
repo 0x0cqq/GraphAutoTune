@@ -91,10 +91,11 @@ __device__ int find_father_uid(const DeviceContext<config> &context,
 
 __device__ VIndex_t find_prev_index(VIndex_t *sum, int l, int r,
                                     VIndex_t target_value) {
+    int mid = 0;
+    VIndex_t mid_value = 0;
     while (l != r) {
-        int mid = (l + r) / 2;
-        int mid_value = sum[mid];
-
+        mid = (l + r) >> 1;
+        mid_value = sum[mid];
         if (mid_value <= target_value) {
             l = mid + 1;
         } else {  // mid_value > target_value
@@ -132,6 +133,20 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
         context.schedule_data.vertex_prefix_start[cur_pattern_vid + 1];
     const int end_prefix_id =
         context.schedule_data.vertex_prefix_start[cur_pattern_vid + 2];
+
+    // load 我们可能需要的所有 Prefix 到 shared memory
+    __shared__ VertexSet *shared_vertex_set[MAX_PREFIXS],
+        *father_vertex_set_shared[MAX_PREFIXS];
+    const int tid = threadIdx.x;
+    if (tid < end_prefix_id - start_prefix_id) {
+        shared_vertex_set[tid] = p_storages[start_prefix_id + tid].vertex_set;
+        int father_prefix_id =
+            context.schedule_data.prefix_fathers[start_prefix_id + tid];
+        father_vertex_set_shared[tid] =
+            father_prefix_id == -1 ? nullptr
+                                   : p_storages[father_prefix_id].vertex_set;
+    }
+    __threadfence_block();
 
     // 下一个点的 uid 的数量，开始和结束的位置
     int start_extend_unit_id =
@@ -178,13 +193,15 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
             cur_v_storage.subtraction_set[cur_level_uid];
 
         bool appeared = cur_subtraction_set.has_data<cur_pattern_vid + 1>(v);
-
         // 构建所有 prefix 对应的 p_storage
+
+#pragma unroll
         for (int cur_prefix_id = start_prefix_id; cur_prefix_id < end_prefix_id;
              cur_prefix_id++) {
+            int index = cur_prefix_id - start_prefix_id;
+
             // 找到下一层的 Storage Unit
-            auto &next_vertex_set =
-                p_storages[cur_prefix_id].vertex_set[next_extend_uid];
+            auto &next_vertex_set = shared_vertex_set[index][next_extend_uid];
 
             if (appeared) {
                 next_vertex_set.clear();
@@ -206,7 +223,7 @@ __global__ void extend_p_storage(const DeviceContext<config> context,
                     find_father_uid<config, cur_pattern_vid + 1>(
                         context, v_storages, father_prefix_id, next_extend_uid);
                 const auto &father_vertex_set =
-                    p_storages[father_prefix_id].vertex_set[father_unit_id];
+                    father_vertex_set_shared[index][father_unit_id];
                 next_vertex_set.intersect(new_vertex_set, father_vertex_set);
             }
         }

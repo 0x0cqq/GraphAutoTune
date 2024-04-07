@@ -1,5 +1,5 @@
-N=20
-M=100
+N=5000
+M=500000
 
 ./bin/random_graph $N $M > ../data/data_graph_$N.txt
 

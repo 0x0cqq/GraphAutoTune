@@ -25,7 +25,6 @@ class ArrayVertexSet {
     __device__ void init_empty(VIndex_t* space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         const int lid = threadIdx.x % THREADS_PER_WARP;
-
         if (lid == 0) {
             _data = space, _allocated_size = storage_size, _size = 0;
         }
@@ -33,7 +32,6 @@ class ArrayVertexSet {
 
     __device__ void init(VIndex_t* input_data, VIndex_t input_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
-
         const int lid = threadIdx.x % THREADS_PER_WARP;
         if (lid == 0) {
             _data = input_data, _allocated_size = _size = input_size;
@@ -53,15 +51,15 @@ class ArrayVertexSet {
         }
     }
 
-    __device__ VIndex_t get(VIndex_t idx) const { return _data[idx]; }
+    __device__ inline VIndex_t get(VIndex_t idx) const { return _data[idx]; }
 
-    __device__ VIndex_t size() const { return _size; }
+    __device__ inline VIndex_t size() const { return _size; }
 
-    __device__ VIndex_t* data() const { return _data; }
+    __device__ inline VIndex_t* data() const { return _data; }
 
-    __device__ void clear() { _size = 0; }
+    __device__ inline void clear() { _size = 0; }
 
-    __device__ size_t storage_space() const { return _allocated_size; }
+    __device__ inline size_t storage_space() const { return _allocated_size; }
 
     template <int depth, size_t SIZE>
     __device__ VIndex_t
@@ -194,6 +192,7 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
                                                   const ArrayVertexSet& b) {
     this->_size = do_intersection_dispatcher<config>(
         this->data(), a.data(), b.data(), a.size(), b.size());
+    assert(_allocated_size >= _size);
 }
 
 template <Config config>
