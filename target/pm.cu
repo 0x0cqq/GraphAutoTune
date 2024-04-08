@@ -65,10 +65,17 @@ int main(int argc, char* argv[]) {
                         time_end - time_start)
                         .count();
 
-    std::cout << "Time: " << duration << " microseconds ("
-              << double(duration) / 1000000 << " s)" << std::endl;
+    std::cout << "Time: " << duration << " us (" << double(duration) / 1000000
+              << " s)" << std::endl;
 
     // 4. 输出结果
+
+    unsigned long long total_count = 0;
+    gpuErrchk(cudaMemcpyFromSymbol(&total_count, GPU::counter,
+                                   sizeof(unsigned long long)));
+
+    std::cout << "(Total Intersection Count: " << total_count << ")"
+              << std::endl;
 
     std::cout << "Answer: " << ans << std::endl;
 

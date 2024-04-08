@@ -13,6 +13,8 @@
 
 namespace GPU {
 
+__device__ unsigned long long counter = 0;
+
 // 用数组形式存储的节点集合。
 template <Config config>
 class ArrayVertexSet {
@@ -190,8 +192,16 @@ __device__ VIndex_t do_intersection_dispatcher(VIndex_t* out, const VIndex_t* a,
 template <Config config>
 __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
                                                   const ArrayVertexSet& b) {
-    this->_size = do_intersection_dispatcher<config>(
+    const int lane_id = threadIdx.x % THREADS_PER_WARP;
+    const int warp_id = threadIdx.x / THREADS_PER_WARP;
+    if (lane_id == 0) {
+        atomicAdd(&counter, 1);
+    }
+    __syncthreads();
+
+    VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
         this->data(), a.data(), b.data(), a.size(), b.size());
+    this->_size = after_intersect_size;
     assert(_allocated_size >= _size);
 }
 

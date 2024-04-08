@@ -50,6 +50,22 @@ class Pattern {
     constexpr bool operator==(const Pattern &other) const {
         return _v_cnt == other._v_cnt && _edges == other._edges;
     }
+
+    constexpr int get_max_degree() const {
+        int max_degree = 0;
+        for (VIndex_t i = 0; i < _v_cnt; i++) {
+            int degree = 0;
+            for (VIndex_t j = 0; j < _v_cnt; j++) {
+                if (_edges[i * _v_cnt + j] == 1) {
+                    degree++;
+                }
+            }
+            if (degree > max_degree) {
+                max_degree = degree;
+            }
+        }
+        return max_degree;
+    }
 };
 
 // helper functions

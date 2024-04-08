@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cassert>
 #include <iostream>
+#include <numeric>
+#include <queue>
 #include <vector>
 
 #include "configs/gpu_consts.cuh"
@@ -52,6 +54,11 @@ class Prefix {
         std::cout << std::endl;
     }
 };
+
+using Permutation = std::vector<int>;
+using PermutationGroup = std::vector<std::vector<int>>;
+using Restrictions = std::vector<std::pair<int, int>>;
+using Pairs = std::vector<std::pair<int, int>>;
 
 constexpr int get_iep_suffix_vertexes(const Pattern &p) {
     // 最后的若干个节点，他们没有相互的依赖。
@@ -159,6 +166,252 @@ constexpr std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
     return graph_cnt;
 };
 
+// 获取所有让 p 的自同构的 permutation
+constexpr std::vector<Permutation> get_isomorphism_perm(const Pattern &p) {
+    std::vector<Permutation> ans{};
+    Permutation perm{};
+    for (int i = 0; i < p.v_cnt(); i++) {
+        perm.push_back(i);
+    }
+    // 枚举所有的 permutation
+    do {
+        Pattern permutated_p = get_permutated_pattern(perm, p);
+        if (permutated_p == p) {
+            ans.push_back(perm);
+        }
+    } while (std::next_permutation(perm.begin(), perm.end()));
+    return ans;
+}
+
+constexpr int get_isomorphism_multiplicity(const Pattern &p) {
+    return get_isomorphism_perm(p).size();
+}
+
+PermutationGroup calc_perm_group(const Permutation &perm) {
+    int size = perm.size();
+    bool use[size];
+    for (int i = 0; i < size; i++) use[i] = false;
+    PermutationGroup res{};
+    for (int i = 0; i < size; i++) {
+        if (use[i]) continue;
+
+        std::vector<int> tmp_vec{i};
+        use[i] = true;
+        int x = perm[i];
+        // 当还没有 forming 成一个 cycle 的时候
+        while (use[x] == false) {
+            use[x] = true;
+            tmp_vec.push_back(x);
+            x = perm[x];
+        }
+        res.push_back(tmp_vec);
+    }
+    return res;
+}
+
+// 尽可能多的找到限制，但是不一定是正确的
+std::vector<Restrictions> aggressive_optimize_get_all_pairs(const Pattern &p) {
+    std::vector<Restrictions> ordered_pairs_vector{};
+
+    std::vector<Permutation> iso_perm = get_isomorphism_perm(p);
+    std::vector<PermutationGroup> perm_groups{};
+    for (const Permutation &v : iso_perm)
+        perm_groups.push_back(calc_perm_group(v));
+
+    std::vector<Permutation> filtered_iso_perm{};
+    std::vector<PermutationGroup> filtered_perm_groups{};
+    Pairs ordered_pairs{};
+
+    // 删除包含一个两元素排列和一些一元素排列的排列组，记录对应的限制
+    for (unsigned int i = 0; i < perm_groups.size(); i++) {
+        int two_element_number = 0;
+        std::pair<int, int> found_pair;
+        // 对于每一个置换
+        for (const std::vector<int> &v : perm_groups[i]) {
+            // 二元置换
+            if (v.size() == 2) {
+                ++two_element_number;
+                found_pair = std::make_pair(v[0], v[1]);
+            } else if (v.size() != 1) {  // or >= 3
+                two_element_number = -1;
+                break;
+            }
+        }
+        // 如果只有一个二元组
+        if (two_element_number == 1) {
+            filtered_perm_groups.push_back(perm_groups[i]);
+            filtered_iso_perm.push_back(iso_perm[i]);
+            ordered_pairs.push_back(found_pair);
+            assert(found_pair.first < found_pair.second);
+        }
+    }
+
+    aggressive_optimize_dfs(ordered_pairs, iso_perm, perm_groups,
+                            ordered_pairs_vector, p.v_cnt());
+}
+
+bool is_dag(const Pairs &base_dag, int size) {
+    std::vector<int> degree(size);
+    for (const auto &edge : base_dag) {
+        degree[edge.second]++;
+    }
+    std::queue<int> q;
+    int visit_cnt = 0;
+    for (int i = 0; i < size; i++) {
+        if (degree[i] == 0) q.push(i);
+    }
+    while (!q.empty()) {
+        int x = q.front();
+        q.pop();
+        visit_cnt++;
+        for (const auto &p : base_dag) {
+            if (p.first == x) --degree[p.second];
+            if (degree[p.second] == 0) q.push(p.second);
+        }
+    }
+    return visit_cnt == size;
+}
+
+void aggressive_optimize_dfs(Pairs base_dag, std::vector<Permutation> iso_perm,
+                             std::vector<PermutationGroup> perm_groups,
+                             std::vector<Pairs> &ordered_pairs_vector,
+                             int size) {
+    std::vector<Permutation> filtered_iso_perm{};
+    std::vector<PermutationGroup> filtered_perm_groups{};
+
+    for (int i = 0; i < iso_perm.size(); i++) {
+        Pairs test_dag{base_dag};
+        const std::vector<int> &iso = iso_perm[i];
+        for (const std::pair<int, int> &pair : base_dag) {
+            test_dag.push_back(
+                std::make_pair(iso[pair.first], iso[pair.second]));
+        }
+        // is not dag means conflict
+        if (is_dag(test_dag, size) == false) {
+            filtered_perm_groups.push_back(perm_groups[i]);
+            filtered_iso_perm.push_back(iso_perm[i]);
+        }
+    }
+
+    iso_perm = filtered_iso_perm;
+    perm_groups = filtered_perm_groups;
+
+    if (iso_perm.size() == 1) {
+        ordered_pairs_vector.push_back(base_dag);
+        return;
+    }
+
+    std::pair<int, int> found_pair;
+    for (unsigned int i = 0; i < perm_groups.size(); i++) {
+        for (const std::vector<int> &v : perm_groups[i]) {
+            if (v.size() == 2) {
+                found_pair = std::make_pair(v[0], v[1]);
+                std::vector<PermutationGroup> next_perm_groups = perm_groups;
+                std::vector<Permutation> next_iso_perm = iso_perm;
+                Pairs next_base_dag{base_dag};
+
+                next_perm_groups.erase(next_perm_groups.begin() + i);
+                next_iso_perm.erase(next_iso_perm.begin() + i);
+                assert(found_pair.first < found_pair.second);
+                base_dag.push_back(found_pair);
+
+                aggressive_optimize_dfs(next_base_dag, next_iso_perm,
+                                        next_perm_groups, ordered_pairs_vector,
+                                        size);
+                break;
+            }
+        }
+    }
+}
+
+std::vector<Restrictions> restricts_generate(const Pattern &p) {
+    std::vector<Restrictions> restrictions_list =
+        aggressive_optimize_get_all_pairs(p);
+    std::vector<Restrictions> result_restrictions_list;
+    int ans =
+        naive_match_in_full_graph(p, {}) / get_isomorphism_multiplicity(p);
+    int thread_num = 1;
+    for (const auto &restrictions : restrictions_list) {
+        int cur_ans = naive_match_in_full_graph(p, restrictions);
+        if (cur_ans == ans) {
+            result_restrictions_list.push_back(restrictions);
+        }
+    }
+    return restrictions_list;
+}
+
+double estimate_restrictions(const Pattern &p, const Restrictions &restricts,
+                             VIndex_t v_cnt, EIndex_t e_cnt,
+                             long long tri_cnt) {
+    int max_degree = p.get_max_degree();
+    int size = p.v_cnt();
+    int iep_suffix_num = get_iep_suffix_vertexes(p);
+
+    // p_size: pow(p0, i) * v_cnt;
+    // pp_size: pow(p1, i)
+
+    double p0 = e_cnt * 1.0 / v_cnt;  // p_size[1];
+    double p1 = tri_cnt * 1.0 * v_cnt / e_cnt / e_cnt;
+
+    int restricts_size = restricts.size();
+    std::sort(restricts.begin(), restricts.end());
+
+    std::vector<double> sum(restricts_size);
+    std::vector<int> tmp(size);
+    for (int i = 0; i < size; i++) tmp[i] = i;
+
+    do {
+        for (int i = 0; i < restricts_size; i++)
+            if (tmp[restricts[i].first] > tmp[restricts[i].second]) {
+                sum[i] += 1;
+            } else {
+                break;
+            }
+    } while (std::next_permutation(tmp.begin(), tmp.end()));
+
+    double total = 1;
+    for (int i = 2; i <= size; i++) total *= i;
+    for (int i = 0; i < restricts_size; i++) sum[i] = sum[i] / total;
+    for (int i = restricts_size - 1; i > 0; --i) sum[i] /= sum[i - 1];
+
+    std::vector<int> invariant_size[size];
+    for (int i = 0; i < size; i++) invariant_size[i].clear();
+
+    double val = 1;
+    for (int i = size - iep_suffix_num - 1; i >= 0; --i) {
+        int cnt_forward = 0;
+        for (int j = 0; j < i; j++) {
+            if (p.has_edge(j, i)) {
+                ++cnt_forward;
+            }
+        }
+
+        int c = cnt_forward;
+        for (int j = i - 1; j >= 0; --j) {
+            if (p.has_edge(j, i)) {
+                invariant_size[j].push_back(c--);
+            }
+        }
+
+        for (int j = 0; j < invariant_size[i].size(); j++) {
+            if (invariant_size[i][j] > 1) {
+                val +=
+                    p0 * std::pow(p1, invariant_size[i][j] - 2) * std::log2(p0);
+            }
+        }
+        for (int j = 0; j < restricts_size; j++) {
+            if (restricts[j].second == i) val *= sum[j];
+        }
+        if (i) {
+            val *= p0 * std::pow(p1, cnt_forward - 1);
+        } else {
+            val *= v_cnt;
+        }
+    }
+
+    return val;
+}
+
 struct IEPInfo {
     // len(vertex_ids) = the number of distinct prefixs used in the IEP process
     std::vector<int> iep_vertex_id;  // vid -> pid: ver_ids[vid] = prefix_id
@@ -229,30 +482,6 @@ struct IEPGroup {
         std::cout << std::endl;
     }
 };
-
-// 获取所有让 p 的自同构的 permutation
-constexpr std::vector<std::vector<int>> get_isomorphism_permutations(
-    const Pattern &p) {
-    std::vector<std::vector<int>> ans{};
-    std::vector<int> perm{};
-    for (int i = 0; i < p.v_cnt(); i++) {
-        perm.push_back(i);
-    }
-    // 枚举所有的 permutation
-    do {
-        Pattern permutated_p = get_permutated_pattern(perm, p);
-        if (permutated_p == p) {
-            ans.push_back(perm);
-        }
-    } while (std::next_permutation(perm.begin(), perm.end()));
-    return ans;
-}
-
-constexpr int get_isomorphism_multiplicity(const Pattern &p) {
-    std::vector<std::vector<int>> isomorphism_permutations =
-        get_isomorphism_permutations(p);
-    return isomorphism_permutations.size();
-}
 
 struct IEPHelperInfo {
     int iep_suffix_vertexes;       // 有多少个点可以参与 IEP
