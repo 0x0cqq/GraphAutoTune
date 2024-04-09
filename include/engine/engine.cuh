@@ -48,9 +48,6 @@ class Executor {
     // Extend 的进度（考虑合并进 cur_progress 里面）
     int cur_progress[MAX_VERTEXES];
 
-    // 总的答案
-    unsigned long long ans;
-
     template <int cur_pattern_vid>
     __host__ void search();
 
@@ -81,7 +78,10 @@ class Executor {
             vertex_storages[i].init();
         }
 
+        // 分配答案空间
         gpuErrchk(cudaMalloc(&d_ans, sizeof(unsigned long long) * NUMS_UNIT));
+        // 设备空间设置为 0
+        gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * NUMS_UNIT));
 
         // 准备前缀和空间
         VIndex_t *temp = nullptr;
@@ -127,6 +127,13 @@ class Executor {
             v_storage.num_units));
     }
 
+    __host__ unsigned long long reduce_answer() {
+        // 通过 thrust::reduce 求和
+        thrust::device_ptr<unsigned long long> ans_ptr(d_ans);
+        // 需要求和所有的 Unit
+        return thrust::reduce(ans_ptr, ans_ptr + NUMS_UNIT);
+    }
+
     __host__ unsigned long long perform_search(DeviceContext<config> &context);
 };
 
@@ -136,8 +143,10 @@ __host__ unsigned long long Executor<config>::perform_search(
     DeviceContext<config> &context) {
     // 把 Context 到当前的 Executor
     this->set_context(context);
-    // 重置答案
-    this->ans = 0;
+
+    // 设备空间设置为0
+    // 按理说这个应该放到外面。但总共也就一次，所以就放在这里了
+    gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * NUMS_UNIT));
 
     VIndex_t v_cnt = device_context->graph_backend.v_cnt();
     for (VIndex_t base_index = 0; base_index < v_cnt; base_index += NUMS_UNIT) {
@@ -157,7 +166,9 @@ __host__ unsigned long long Executor<config>::perform_search(
 
         search<0>();
     }
-    return this->ans;
+
+    // 从 d_ans 里面把答案取出来
+    return reduce_answer();
 }
 
 template <Config config>
@@ -336,22 +347,14 @@ __host__ void Executor<config>::final_step() {
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
 
-    // 通过 thrust::reduce 求和
-    thrust::device_ptr<unsigned long long> ans_ptr(d_ans);
-
-    unsigned long long this_ans =
-        thrust::reduce(ans_ptr, ans_ptr + last_v_storage.num_units);
-
-    this->ans += this_ans;
-
 #ifndef NDEBUG
     auto time_end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         time_end - time_start);
     if (cur_pattern_vid < LOG_DEPTH) {
         std::cout << "Level " << device_context->schedule_data.basic_vertexes
-                  << ": leave final step, ans = " << this_ans << ", time "
-                  << duration.count() << " ms" << std::endl;
+                  << ": leave final step, time " << duration.count() << " ms"
+                  << std::endl;
     }
 #endif
 }
