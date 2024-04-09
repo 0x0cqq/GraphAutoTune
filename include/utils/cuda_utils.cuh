@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <iomanip>
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -42,8 +43,29 @@ int get_device_information(bool print = false) {
 }
 
 void print_device_memory() {
-    size_t free, total;
-    gpuErrchk(cudaMemGetInfo(&free, &total));
-    int used = int(double(total - free) / (1024 * 1024));
-    std::cout << "Used memory: " << used << " MB\n";
+    size_t free_byte, used_byte, total_byte;
+    gpuErrchk(cudaMemGetInfo(&free_byte, &total_byte));
+    used_byte = total_byte - free_byte;
+
+    std::cout.setf(std::ios::fixed);
+    std::cout << std::setprecision(2) << "Memory Stats: " << "used: "
+              << double(used_byte) / 1024 / 1024 / 1024 << " GB, "
+              << "total: " << double(total_byte) / 1024 / 1024 / 1024 << " GB"
+              << std::endl;
+    std::cout.unsetf(std::ios::fixed);
+    std::cout << std::setprecision(6);
+}
+
+template <typename T>
+__device__ int lower_bound(const T *loop_data_ptr, int loop_size,
+                           T min_vertex) {
+    int l = 0, r = loop_size - 1;
+    while (l <= r) {
+        int mid = r - ((r - l) >> 1);
+        if (loop_data_ptr[mid] < min_vertex)
+            l = mid + 1;
+        else
+            r = mid - 1;
+    }
+    return l;
 }

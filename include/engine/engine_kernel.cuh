@@ -324,8 +324,29 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
             context, v_storage, loop_set_prefix_id, uid);
         // printf("uid: %d loop set uid: %d\n", uid, loop_set_uid);
         // 将 uid 位置的 set 写入 unit_extend_size
-        v_storage.unit_extend_size[uid] =
-            p_storage.vertex_set[loop_set_uid].size();
+
+        // 在这里第一次 apply 限制
+        // 不是写 size，而是写比 min_vertex 小的点的个数。
+        // 遍历所有和 cur_pattern_vid 相关的限制。
+        int restrict_index_start =
+            context.schedule_data.restrictions_start[cur_pattern_vid];
+        int restrict_index_end =
+            context.schedule_data.restrictions_start[cur_pattern_vid + 1];
+        VIndex_t min_vertex = context.graph_backend.v_cnt();
+        for (int i = restrict_index_start; i < restrict_index_end; i++) {
+            int restrict_target = context.schedule_data.restrictions[i];
+            int v_target =
+                v_storage.subtraction_set[loop_set_uid].get(restrict_target);
+            if (min_vertex > v_target) {
+                min_vertex = v_target;
+            }
+        }
+        // 在 loop_set 里面，二分找到第一个大于 min_vertex 的节点
+
+        int size_after_restrict =
+            lower_bound(p_storage.vertex_set[loop_set_uid].data(),
+                        p_storage.vertex_set[loop_set_uid].size(), min_vertex);
+        v_storage.unit_extend_size[uid] = size_after_restrict;
     }
 }
 

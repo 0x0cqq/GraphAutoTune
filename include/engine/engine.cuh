@@ -96,7 +96,8 @@ class Executor {
         gpuErrchk(cudaDeviceSynchronize());
 
 #ifndef NDEBUG
-        std::cout << "Executor: Constructor Done." << std::endl;
+        std::cout << "Executor: Constructor Done.";
+        print_device_memory();
 #endif
     }
 
@@ -235,8 +236,9 @@ __host__ void Executor<config>::prepare() {
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
 
+    auto &v_storage = vertex_storages[cur_pattern_vid];
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_sum
-    do_extend_size_sum(vertex_storages[cur_pattern_vid]);
+    do_extend_size_sum(v_storage);
 
 #ifndef NDEBUG
     if (cur_pattern_vid < LOG_DEPTH) {
