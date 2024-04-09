@@ -235,10 +235,8 @@ __host__ void Executor<config>::prepare() {
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
 
-    auto &v_storage = vertex_storages[cur_pattern_vid];
-
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_sum
-    do_extend_size_sum(v_storage);
+    do_extend_size_sum(vertex_storages[cur_pattern_vid]);
 
 #ifndef NDEBUG
     if (cur_pattern_vid < LOG_DEPTH) {
@@ -304,10 +302,8 @@ __host__ bool Executor<config>::extend() {
     extend_v_storage<config, cur_pattern_vid>(
         *device_context, prefix_storages, vertex_storages, cur_unit, *end_unit);
 
-    extend_p_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
-                                            vertex_storages, cur_unit,
-                                            *end_unit);
+    extend_p_storage<config, cur_pattern_vid>(
+        *device_context, prefix_storages, vertex_storages, cur_unit, *end_unit);
 
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());

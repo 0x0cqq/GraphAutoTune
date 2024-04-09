@@ -179,7 +179,8 @@ void extend_v_storage(const DeviceContext<config> context,
 template <Config config, int cur_pattern_vid>
 __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
                                         PrefixStorages<config> p_storages,
-                                        VertexStorages<config> v_storages,
+                                        VertexStorage<config> cur_v_storage,
+                                        VertexStorage<config> next_v_storage,
                                         int start_uid, int end_uid) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     __shared__ VertexSet new_vertex_sets[WARPS_PER_BLOCK];
@@ -191,10 +192,6 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     const int loop_set_prefix_id =
         context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
     const auto &loop_set_storage = p_storages[loop_set_prefix_id];
-
-    // 当前点的 v_storage 和 下一个点的 v_storage
-    const auto &cur_v_storage = v_storages[cur_pattern_vid];
-    const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
 
     // 下一个点的 prefix_id 的范围
     const int start_prefix_id =
@@ -288,6 +285,20 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
             }
         }
     }
+}
+
+template <Config config, int cur_pattern_vid>
+void extend_p_storage(DeviceContext<config> &context,
+                      PrefixStorages<config> &prefix_storages,
+                      VertexStorages<config> &vertex_storages, int start_uid,
+                      int end_uid) {
+    const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
+    const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
+
+    extend_p_storage_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
+                                            cur_v_storage, next_v_storage,
+                                            start_uid, end_uid);
 }
 
 // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
