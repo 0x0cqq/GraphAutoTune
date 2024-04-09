@@ -329,14 +329,13 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
         // 不是写 size，而是写比 min_vertex 小的点的个数。
         // 遍历所有和 cur_pattern_vid 相关的限制。
         int restrict_index_start =
-            context.schedule_data.restrictions_start[cur_pattern_vid];
-        int restrict_index_end =
             context.schedule_data.restrictions_start[cur_pattern_vid + 1];
+        int restrict_index_end =
+            context.schedule_data.restrictions_start[cur_pattern_vid + 2];
         VIndex_t min_vertex = context.graph_backend.v_cnt();
         for (int i = restrict_index_start; i < restrict_index_end; i++) {
             int restrict_target = context.schedule_data.restrictions[i];
-            int v_target =
-                v_storage.subtraction_set[loop_set_uid].get(restrict_target);
+            int v_target = v_storage.subtraction_set[uid].get(restrict_target);
             if (min_vertex > v_target) {
                 min_vertex = v_target;
             }
