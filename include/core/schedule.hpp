@@ -820,7 +820,7 @@ class Schedule {
             this->restrictions.begin(), this->restrictions.end(),
             [this](const auto &p) { return p.second >= basic_vertexes; });
         this->restrictions.erase(it, this->restrictions.end());
-        
+
         // 第一个元素 change 了，就要写一下 start
         int current_start = 0;
         for (int i = 0; i < basic_vertexes; i++) {
@@ -899,6 +899,8 @@ class Schedule {
         std::cout << "Best Cost: " << best_cost << std::endl;
 
         Pattern new_p = get_permutated_pattern(best_perm, p);
+
+        output_pattern(new_p);
 
         // 计算相关信息
         calculate_pattern(new_p);

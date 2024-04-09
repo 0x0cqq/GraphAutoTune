@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <string_view>
 #include <vector>
 
@@ -100,5 +101,19 @@ constexpr bool is_pattern_valid(const Pattern &p) {
     }
     return true;
 };
+
+void output_pattern(const Pattern &p) {
+    std::cout << "Pattern:" << std::endl;
+    std::cout << "  V: " << p.v_cnt() << " E: " << p.e_cnt() << std::endl;
+    std::cout << "  Edges: ";
+    for (int i = 0; i < p.v_cnt(); i++) {
+        for (int j = i; j < p.v_cnt(); j++) {
+            if (p.has_edge(i, j)) {
+                std::cout << "(" << i << "," << j << ") ";
+            }
+        }
+    }
+    std::cout << std::endl;
+}
 
 }  // namespace Core
