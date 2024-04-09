@@ -209,6 +209,86 @@ PermutationGroup calc_perm_group(const Permutation &perm) {
     return res;
 }
 
+bool is_dag(const Pairs &base_dag, int size) {
+    std::vector<int> degree(size);
+    for (const auto &edge : base_dag) {
+        degree[edge.second]++;
+    }
+    std::queue<int> q;
+    int visit_cnt = 0;
+    for (int i = 0; i < size; i++) {
+        if (degree[i] == 0) q.push(i);
+    }
+    while (!q.empty()) {
+        int x = q.front();
+        q.pop();
+        visit_cnt++;
+        for (const auto &p : base_dag) {
+            if (p.first == x) {
+                --degree[p.second];
+                if (degree[p.second] == 0) q.push(p.second);
+            }
+        }
+    }
+    return visit_cnt == size;
+}
+
+void aggressive_optimize_dfs(Pairs base_dag, std::vector<Permutation> iso_perm,
+                             std::vector<PermutationGroup> perm_groups,
+                             std::vector<Pairs> &ordered_pairs_vector,
+                             int size) {
+    std::vector<Permutation> filtered_iso_perm{};
+    std::vector<PermutationGroup> filtered_perm_groups{};
+
+    for (int i = 0; i < iso_perm.size(); i++) {
+        Pairs test_dag{base_dag};
+        const std::vector<int> &iso = iso_perm[i];
+        for (const std::pair<int, int> &pair : base_dag) {
+            test_dag.push_back(
+                std::make_pair(iso[pair.first], iso[pair.second]));
+        }
+        // is not dag means conflict
+        if (is_dag(test_dag, size)) {
+            filtered_perm_groups.push_back(perm_groups[i]);
+            filtered_iso_perm.push_back(iso_perm[i]);
+        }
+    }
+
+    iso_perm = filtered_iso_perm;
+    perm_groups = filtered_perm_groups;
+
+    if (iso_perm.size() == 1) {
+        ordered_pairs_vector.push_back(base_dag);
+        return;
+    }
+
+    std::pair<int, int> found_pair;
+    for (unsigned int i = 0; i < perm_groups.size(); i++) {
+        int two_element_number = 0;
+
+        for (const std::vector<int> &v : perm_groups[i]) {
+            if (v.size() == 2) {
+                found_pair = std::make_pair(v[0], v[1]);
+                std::vector<PermutationGroup> next_perm_groups = perm_groups;
+                std::vector<Permutation> next_iso_perm = iso_perm;
+                Pairs next_base_dag{base_dag};
+
+                next_perm_groups.erase(next_perm_groups.begin() + i);
+                next_iso_perm.erase(next_iso_perm.begin() + i);
+                assert(found_pair.first < found_pair.second);
+                base_dag.push_back(found_pair);
+
+                aggressive_optimize_dfs(next_base_dag, next_iso_perm,
+                                        next_perm_groups, ordered_pairs_vector,
+                                        size);
+            }
+        }
+        if (two_element_number >= 1) {
+            break;
+        }
+    }
+}
+
 // 尽可能多的找到限制，但是不一定是正确的
 std::vector<Restrictions> aggressive_optimize_get_all_pairs(const Pattern &p) {
     std::vector<Restrictions> ordered_pairs_vector{};
@@ -239,108 +319,44 @@ std::vector<Restrictions> aggressive_optimize_get_all_pairs(const Pattern &p) {
         }
         // 如果只有一个二元组
         if (two_element_number == 1) {
-            filtered_perm_groups.push_back(perm_groups[i]);
-            filtered_iso_perm.push_back(iso_perm[i]);
             ordered_pairs.push_back(found_pair);
             assert(found_pair.first < found_pair.second);
-        }
-    }
-
-    aggressive_optimize_dfs(ordered_pairs, iso_perm, perm_groups,
-                            ordered_pairs_vector, p.v_cnt());
-}
-
-bool is_dag(const Pairs &base_dag, int size) {
-    std::vector<int> degree(size);
-    for (const auto &edge : base_dag) {
-        degree[edge.second]++;
-    }
-    std::queue<int> q;
-    int visit_cnt = 0;
-    for (int i = 0; i < size; i++) {
-        if (degree[i] == 0) q.push(i);
-    }
-    while (!q.empty()) {
-        int x = q.front();
-        q.pop();
-        visit_cnt++;
-        for (const auto &p : base_dag) {
-            if (p.first == x) --degree[p.second];
-            if (degree[p.second] == 0) q.push(p.second);
-        }
-    }
-    return visit_cnt == size;
-}
-
-void aggressive_optimize_dfs(Pairs base_dag, std::vector<Permutation> iso_perm,
-                             std::vector<PermutationGroup> perm_groups,
-                             std::vector<Pairs> &ordered_pairs_vector,
-                             int size) {
-    std::vector<Permutation> filtered_iso_perm{};
-    std::vector<PermutationGroup> filtered_perm_groups{};
-
-    for (int i = 0; i < iso_perm.size(); i++) {
-        Pairs test_dag{base_dag};
-        const std::vector<int> &iso = iso_perm[i];
-        for (const std::pair<int, int> &pair : base_dag) {
-            test_dag.push_back(
-                std::make_pair(iso[pair.first], iso[pair.second]));
-        }
-        // is not dag means conflict
-        if (is_dag(test_dag, size) == false) {
+        } else {
             filtered_perm_groups.push_back(perm_groups[i]);
             filtered_iso_perm.push_back(iso_perm[i]);
         }
     }
 
-    iso_perm = filtered_iso_perm;
-    perm_groups = filtered_perm_groups;
+    aggressive_optimize_dfs(ordered_pairs, filtered_iso_perm,
+                            filtered_perm_groups, ordered_pairs_vector,
+                            p.v_cnt());
 
-    if (iso_perm.size() == 1) {
-        ordered_pairs_vector.push_back(base_dag);
-        return;
-    }
-
-    std::pair<int, int> found_pair;
-    for (unsigned int i = 0; i < perm_groups.size(); i++) {
-        for (const std::vector<int> &v : perm_groups[i]) {
-            if (v.size() == 2) {
-                found_pair = std::make_pair(v[0], v[1]);
-                std::vector<PermutationGroup> next_perm_groups = perm_groups;
-                std::vector<Permutation> next_iso_perm = iso_perm;
-                Pairs next_base_dag{base_dag};
-
-                next_perm_groups.erase(next_perm_groups.begin() + i);
-                next_iso_perm.erase(next_iso_perm.begin() + i);
-                assert(found_pair.first < found_pair.second);
-                base_dag.push_back(found_pair);
-
-                aggressive_optimize_dfs(next_base_dag, next_iso_perm,
-                                        next_perm_groups, ordered_pairs_vector,
-                                        size);
-                break;
-            }
-        }
-    }
+    return ordered_pairs_vector;
 }
 
 std::vector<Restrictions> restricts_generate(const Pattern &p) {
     std::vector<Restrictions> restrictions_list =
         aggressive_optimize_get_all_pairs(p);
+    // std::cout << "  Aggressive Optimize: " << restrictions_list.size()
+    //           << " restrictions found." << std::endl;
     std::vector<Restrictions> result_restrictions_list;
     int ans =
         naive_match_in_full_graph(p, {}) / get_isomorphism_multiplicity(p);
-    int thread_num = 1;
     for (const auto &restrictions : restrictions_list) {
         int cur_ans = naive_match_in_full_graph(p, restrictions);
+        // std::cout << "    [";
+        // for (const auto &p : restrictions) {
+        //     std::cout << "(" << p.first << ", " << p.second << ") ";
+        // }
+        // std::cout << "]. Ans: " << cur_ans << std::endl;
         if (cur_ans == ans) {
             result_restrictions_list.push_back(restrictions);
         }
     }
-    return restrictions_list;
+    return result_restrictions_list;
 }
 
-double estimate_restrictions(const Pattern &p, const Restrictions &restricts,
+double estimate_restrictions(const Pattern &p, const Restrictions &restrictions,
                              VIndex_t v_cnt, EIndex_t e_cnt,
                              long long tri_cnt) {
     int max_degree = p.get_max_degree();
@@ -349,6 +365,8 @@ double estimate_restrictions(const Pattern &p, const Restrictions &restricts,
 
     // p_size: pow(p0, i) * v_cnt;
     // pp_size: pow(p1, i)
+
+    Restrictions restricts = restrictions;
 
     double p0 = e_cnt * 1.0 / v_cnt;  // p_size[1];
     double p1 = tri_cnt * 1.0 * v_cnt / e_cnt / e_cnt;
@@ -567,18 +585,24 @@ constexpr IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
 
 class Schedule {
   public:
+    // 能使用 IEP 的点的数量
     int iep_suffix_vertexes;
+    // 不考虑 IEP 的点的数量
     int basic_vertexes;
-    int total_prefix_num;
+    // 所有的前缀
     std::vector<Prefix> prefixs;
     // 第 i 个节点的 loop set 所用的 prefix
     std::vector<int> loop_set_prefix_id;
     // 最后一个是第 i 个节点的 prefixes
     std::vector<int> vertex_prefix_start;
     std::vector<int> prefixs_father;
-    IEPInfo iep_info;
 
-    // restrictions
+    // 限制
+    std::vector<int> restrictions_start;
+    Restrictions restrictions;
+
+    // 和 IEP 有关的信息
+    IEPInfo iep_info;
 
     constexpr void sort_prefixs() {
         std::vector<int> permutation(prefixs.size());
@@ -716,17 +740,6 @@ class Schedule {
                 }
             }
         }
-
-        total_prefix_num = prefixs.size();
-
-        // 如果没有 child，就只需要 size
-
-        // 增加限制
-        // 目前的限制生成是非常愚蠢的，需要有 matching 的算法才能生成
-
-        // 计算 cost
-
-        // 根据 cost 更新 best val
     }
 
     void output() const {
@@ -737,6 +750,7 @@ class Schedule {
         }
         std::cout << std::endl;
         std::cout << "Prefix start: ";
+        assert(vertex_prefix_start.size() == basic_vertexes);
         for (int i = 0; i < basic_vertexes; i++) {
             std::cout << vertex_prefix_start[i] << " ";
         }
@@ -746,6 +760,17 @@ class Schedule {
             std::cout << "\t";
             prefixs[i].output(i, prefixs_father[i]);
         }
+        std::cout << "Restrictions start: ";
+        assert(restrictions_start.size() == basic_vertexes);
+        for (int i = 0; i < basic_vertexes; i++) {
+            std::cout << restrictions_start[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Restrictions: ";
+        for (const auto &p : restrictions) {
+            std::cout << "(" << p.first << ", " << p.second << ") ";
+        }
+        std::cout << std::endl;
         std::cout << "IEP_INFO: " << std::endl;
         iep_info.output();
     }
@@ -783,30 +808,107 @@ class Schedule {
         }
     }
 
+    void build_restrictions(const Restrictions &restrictions) {
+        this->restrictions = restrictions;
+        std::sort(this->restrictions.begin(), this->restrictions.end(),
+                  [](const auto &a, const auto &b) {
+                      if (a.second != b.second) return a.second < b.second;
+                      return a.first < b.first;
+                  });
+        // filter, 去除所有 second >= basic_vertexes 的限制
+        auto it = std::remove_if(
+            this->restrictions.begin(), this->restrictions.end(),
+            [this](const auto &p) { return p.second >= basic_vertexes; });
+        this->restrictions.erase(it, this->restrictions.end());
+        
+        // 第一个元素 change 了，就要写一下 start
+        int current_start = 0;
+        for (int i = 0; i < basic_vertexes; i++) {
+            while (current_start < basic_vertexes &&
+                   restrictions[current_start].second < i) {
+                current_start++;
+            }
+            restrictions_start.push_back(current_start);
+        }
+    }
+
     Schedule(const Pattern &p) {
-        // 只用当前的顺序，不枚举 permutation
-        calculate_pattern(p);
+        // 最好的 permutation 以及对应的 cost 评估值
+        Permutation best_perm;
+        Restrictions best_restrictions;
+        double best_cost = 1e18;
+        bool have_best = false;
+
+        Permutation perm;
+        for (int i = 0; i < p.v_cnt(); i++) {
+            perm.push_back(i);
+        }
+
+        // 这个循环里面不会动 Schedule 的成员函数
+        do {
+            // 枚举所有的排列
+            Pattern new_p = get_permutated_pattern(perm, p);
+
+            // 连通性上出问题 e.t.c.
+            if (!is_pattern_valid(p)) {
+                continue;
+            }
+
+            std::cout << "Consider permutation: ";
+            for (int i = 0; i < perm.size(); i++) {
+                std::cout << perm[i] << " ";
+            }
+            std::cout << std::endl;
+
+            // 获取所有可能的限制
+            std::vector<Restrictions> all_restrictions =
+                restricts_generate(new_p);
+            for (const auto &restrictions : all_restrictions) {
+                double est = estimate_restrictions(new_p, restrictions, 100,
+                                                   1000, 10000);
+                std::cout << "    Restrictions: [";
+                for (const auto &p : restrictions) {
+                    std::cout << "(" << p.first << ", " << p.second << ") ";
+                }
+                std::cout << "] Estimation: " << est << std::endl;
+
+                if (est < best_cost || !have_best) {
+                    have_best = true;
+                    // 更新 best
+                    best_cost = est;
+                    best_perm = perm;
+                    best_restrictions = restrictions;
+                }
+            }
+
+        } while (std::next_permutation(perm.begin(), perm.end()));
+
+        assert(have_best);
+
+        // 枚举完毕，得到最好的排列和限制
+        std::cout << "Best Permutation:";
+        for (int i = 0; i < best_perm.size(); i++) {
+            std::cout << best_perm[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Best Restrictions:";
+        for (const auto &p : best_restrictions) {
+            std::cout << "(" << p.first << ", " << p.second << ") ";
+        }
+        std::cout << std::endl;
+        std::cout << "Best Cost: " << best_cost << std::endl;
+
+        Pattern new_p = get_permutated_pattern(best_perm, p);
+
+        // 计算相关信息
+        calculate_pattern(new_p);
         // 排序所有的前缀
         sort_prefixs();
         // 构建循环不变式
-        build_loop_invariant(p);
-
-        // 最好的 permutation 以及对应的 cost 评估值
-        // std::vector<int> best_permutation;
-        // double best_cost;
-
-        // std::vector<int> permutation_order;
-        // for (int i = 0; i < p.v_cnt(); i++) {
-        //     permutation_order.push_back(i);
-        // }
-
-        // do {  // 枚举所有的排列
-        //     Pattern new_p = get_permutated_pattern(permutation_order, p);
-
-        //     calculate_pattern(new_p);
-
-        // } while (std::next_permutation(permutation_order.begin(),
-        //                                permutation_order.end()));
+        build_loop_invariant(new_p);
+        // 把限制塞进去
+        build_restrictions(best_restrictions);
+        // TODO: IEP 的 redundancy
     }
 };
 
@@ -837,14 +939,17 @@ struct ScheduleData {
     int iep_suffix_vertexes;
     int basic_vertexes;
     int total_prefix_num;
+    int total_restrictions_num;
     Prefix prefixes[MAX_PREFIXS];
     int prefix_fathers[MAX_PREFIXS];
     int vertex_prefix_start[MAX_VERTEXES + 1];  // 这里要包括最后一个
     int loop_set_prefix_id[MAX_VERTEXES];
+    int restrictions_start[MAX_VERTEXES + 1];  // 这里要包括最后一个
+    int restrictions[MAX_VERTEXES * MAX_VERTEXES];
     IEPData iep_data;
     constexpr ScheduleData(const Schedule &schedule)
         : basic_vertexes(schedule.basic_vertexes),
-          total_prefix_num(schedule.total_prefix_num),
+          total_prefix_num(schedule.prefixs.size()),
           iep_suffix_vertexes(schedule.iep_suffix_vertexes),
           iep_data(schedule.iep_info) {
         for (int i = 0; i < schedule.prefixs.size(); i++) {
@@ -856,6 +961,14 @@ struct ScheduleData {
             vertex_prefix_start[i] = schedule.vertex_prefix_start[i];
         }
         vertex_prefix_start[basic_vertexes] = total_prefix_num;
+
+        for (int i = 0; i < schedule.restrictions.size(); i++) {
+            restrictions[i] = schedule.restrictions[i].first;
+        }
+        for (int i = 0; i < basic_vertexes; i++) {
+            restrictions_start[i] = schedule.restrictions_start[i];
+        }
+        restrictions_start[basic_vertexes] = schedule.restrictions.size();
     }
     constexpr void to_device() const {
         // do nothing here. no pointer

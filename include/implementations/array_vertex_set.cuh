@@ -193,7 +193,6 @@ template <Config config>
 __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
                                                   const ArrayVertexSet& b) {
     const int lane_id = threadIdx.x % THREADS_PER_WARP;
-    const int warp_id = threadIdx.x / THREADS_PER_WARP;
     if (lane_id == 0) {
         atomicAdd(&counter, 1);
     }
