@@ -400,7 +400,7 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
                 local_ans += val * iep_data.iep_coef[gid];
             }
         }
-        d_ans[uid] = local_ans;
+        d_ans[uid] += local_ans;
     }
 }
 }  // namespace Engine
