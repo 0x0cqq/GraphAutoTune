@@ -71,13 +71,12 @@ class Pattern {
 
 // helper functions
 
-constexpr Pattern get_permutated_pattern(
-    const std::vector<int> &permutation_order, const Pattern &p) {
+constexpr Pattern get_permutated_pattern(const std::vector<int> &perm,
+                                         const Pattern &p) {
     Pattern new_p{p.v_cnt()};
     for (int i = 0; i < p.v_cnt(); i++) {
         for (int j = 0; j < p.v_cnt(); j++) {
-            if (p.has_edge(i, j))
-                new_p.add_edge(permutation_order[i], permutation_order[j]);
+            if (p.has_edge(i, j)) new_p.add_edge(perm[i], perm[j]);
         }
     }
     return new_p;

@@ -276,7 +276,7 @@ void aggressive_optimize_dfs(Pairs base_dag, std::vector<Permutation> iso_perm,
                 next_perm_groups.erase(next_perm_groups.begin() + i);
                 next_iso_perm.erase(next_iso_perm.begin() + i);
                 assert(found_pair.first < found_pair.second);
-                base_dag.push_back(found_pair);
+                next_base_dag.push_back(found_pair);
 
                 aggressive_optimize_dfs(next_base_dag, next_iso_perm,
                                         next_perm_groups, ordered_pairs_vector,
@@ -337,18 +337,18 @@ std::vector<Restrictions> aggressive_optimize_get_all_pairs(const Pattern &p) {
 std::vector<Restrictions> restricts_generate(const Pattern &p) {
     std::vector<Restrictions> restrictions_list =
         aggressive_optimize_get_all_pairs(p);
-    // std::cout << "  Aggressive Optimize: " << restrictions_list.size()
-    //           << " restrictions found." << std::endl;
+    std::cout << "  Aggressive Optimize: " << restrictions_list.size()
+              << " restrictions found." << std::endl;
     std::vector<Restrictions> result_restrictions_list;
     int ans =
         naive_match_in_full_graph(p, {}) / get_isomorphism_multiplicity(p);
     for (const auto &restrictions : restrictions_list) {
         int cur_ans = naive_match_in_full_graph(p, restrictions);
-        // std::cout << "    [";
-        // for (const auto &p : restrictions) {
-        //     std::cout << "(" << p.first << ", " << p.second << ") ";
-        // }
-        // std::cout << "]. Ans: " << cur_ans << std::endl;
+        std::cout << "    [";
+        for (const auto &p : restrictions) {
+            std::cout << "(" << p.first << ", " << p.second << ") ";
+        }
+        std::cout << "]. Ans: " << cur_ans << std::endl;
         if (cur_ans == ans) {
             result_restrictions_list.push_back(restrictions);
         }
@@ -368,7 +368,7 @@ double estimate_restrictions(const Pattern &p, const Restrictions &restrictions,
 
     Restrictions restricts = restrictions;
 
-    double p0 = e_cnt * 1.0 / v_cnt;  // p_size[1];
+    double p0 = e_cnt * 1.0 / v_cnt / v_cnt;  // p_size[1];
     double p1 = tri_cnt * 1.0 * v_cnt / e_cnt / e_cnt;
 
     int restricts_size = restricts.size();
@@ -397,6 +397,7 @@ double estimate_restrictions(const Pattern &p, const Restrictions &restrictions,
 
     double val = 1;
     for (int i = size - iep_suffix_num - 1; i >= 0; --i) {
+        // 有几个连接到自己编号之前的边
         int cnt_forward = 0;
         for (int j = 0; j < i; j++) {
             if (p.has_edge(j, i)) {
@@ -404,24 +405,26 @@ double estimate_restrictions(const Pattern &p, const Restrictions &restrictions,
             }
         }
 
+        // 这是第几个？
         int c = cnt_forward;
         for (int j = i - 1; j >= 0; --j) {
             if (p.has_edge(j, i)) {
-                invariant_size[j].push_back(c--);
+                invariant_size[j].push_back(c);
+                c--;
             }
         }
 
         for (int j = 0; j < invariant_size[i].size(); j++) {
             if (invariant_size[i][j] > 1) {
-                val +=
-                    p0 * std::pow(p1, invariant_size[i][j] - 2) * std::log2(p0);
+                val += v_cnt * p0 * std::pow(p1, invariant_size[i][j] - 2) *
+                       std::log2(p0 * v_cnt);
             }
         }
         for (int j = 0; j < restricts_size; j++) {
             if (restricts[j].second == i) val *= sum[j];
         }
         if (i) {
-            val *= p0 * std::pow(p1, cnt_forward - 1);
+            val *= v_cnt * p0 * std::pow(p1, cnt_forward - 1);
         } else {
             val *= v_cnt;
         }
@@ -836,6 +839,7 @@ class Schedule {
         // 最好的 permutation 以及对应的 cost 评估值
         Permutation best_perm;
         Restrictions best_restrictions;
+        int best_iep_prefix_num = -1;
         double best_cost = 1e18;
         bool have_best = false;
 
@@ -850,11 +854,23 @@ class Schedule {
             Pattern new_p = get_permutated_pattern(perm, p);
 
             // 连通性上出问题 e.t.c.
-            if (!is_pattern_valid(p)) {
+            if (!is_pattern_valid(new_p)) {
                 continue;
             }
 
-            std::cout << "Consider permutation: ";
+            // 如果 IEP 的点数不够，那么就不用考虑了
+            // 如果 UEP 的点数更多，那么就抹掉之前的
+            int iep_suffix_vertexes = get_iep_suffix_vertexes(new_p);
+            if (iep_suffix_vertexes < best_iep_prefix_num) {
+                continue;
+            } else if (iep_suffix_vertexes > best_iep_prefix_num) {
+                best_iep_prefix_num = iep_suffix_vertexes;
+                best_cost = 1e18;
+                have_best = false;
+            }
+
+            std::cout << "Consider permutation with iep sum ["
+                      << iep_suffix_vertexes << "]: ";
             for (int i = 0; i < perm.size(); i++) {
                 std::cout << perm[i] << " ";
             }
@@ -864,15 +880,15 @@ class Schedule {
             std::vector<Restrictions> all_restrictions =
                 restricts_generate(new_p);
             for (const auto &restrictions : all_restrictions) {
-                double est = estimate_restrictions(new_p, restrictions, 100,
-                                                   1000, 10000);
+                double est = estimate_restrictions(new_p, restrictions, 5000,
+                                                   1000000, 10000);
                 std::cout << "    Restrictions: [";
                 for (const auto &p : restrictions) {
                     std::cout << "(" << p.first << ", " << p.second << ") ";
                 }
                 std::cout << "] Estimation: " << est << std::endl;
 
-                if (est < best_cost || !have_best) {
+                if (!have_best || est < best_cost) {
                     have_best = true;
                     // 更新 best
                     best_cost = est;
