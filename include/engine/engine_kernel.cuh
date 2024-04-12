@@ -67,7 +67,7 @@ __device__ inline int find_father(int father_pattern_vid,
 template <Config config>
 __device__ inline int from_prefix_id_to_vertex_id(
     const DeviceContext<config> &context, int prefix_id) {
-    const auto &prefix = context.schedule_data.prefixes[prefix_id];
+    const auto &prefix = context.schedule_data.prefixs[prefix_id];
     return prefix.data[prefix.depth - 1];
 }
 
@@ -206,7 +206,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     if (tid < end_prefix_id - start_prefix_id) {
         shared_vertex_set[tid] = p_storages[start_prefix_id + tid].vertex_set;
         int father_prefix_id =
-            context.schedule_data.prefix_fathers[start_prefix_id + tid];
+            context.schedule_data.prefixs_father[start_prefix_id + tid];
         father_vertex_set_shared[tid] =
             father_prefix_id == -1 ? nullptr
                                    : p_storages[father_prefix_id].vertex_set;
@@ -261,6 +261,9 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
              cur_prefix_id++) {
             int index = cur_prefix_id - start_prefix_id;
 
+            bool only_need_size =
+                context.schedule_data.prefixs_size_only[cur_prefix_id];
+
             // 找到下一层的 Storage Unit
             auto &next_vertex_set = shared_vertex_set[index][next_extend_uid];
 
@@ -269,9 +272,10 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
                 continue;
             }
 
+            // 在 GraphSet 这里叫做 build_vertex_set
             // 找到 father prefix id
             int father_prefix_id =
-                context.schedule_data.prefix_fathers[cur_prefix_id];
+                context.schedule_data.prefixs_father[cur_prefix_id];
             if (father_prefix_id == -1) {
                 // 没有 father，直接 copy 邻居
                 next_vertex_set.init_copy(neighbors, neighbors_cnt);
@@ -281,7 +285,15 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
                     context, next_v_storage, father_prefix_id, next_extend_uid);
                 const auto &father_vertex_set =
                     father_vertex_set_shared[index][father_unit_id];
-                next_vertex_set.intersect(new_vertex_set, father_vertex_set);
+                if (!only_need_size) {
+                    next_vertex_set.intersect(new_vertex_set,
+                                              father_vertex_set);
+                } else {
+                    // 如果只需要 size，我们就做一个非常简单的相交。
+                    // 但这个时候我们需要把 cur_subtraction_set 直接给挖掉
+                    next_vertex_set.intersect_size<cur_pattern_vid + 1>(
+                        new_vertex_set, father_vertex_set, cur_subtraction_set);
+                }
             }
         }
     }
@@ -411,11 +423,15 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
             // 需要获得 prefix_id 的 uid
             int father_uid = find_prefix_level_uid<config>(
                 context, last_v_storage, this_prefix_id, uid);
-            ans[prefix_id_x] =
-                p_storages[this_prefix_id]
-                    .vertex_set[father_uid]
-                    .subtraction_size_single_thread<cur_pattern_vid>(
+            auto &vs = p_storages[this_prefix_id].vertex_set[father_uid];
+
+            if (context.schedule_data.prefixs_size_only[this_prefix_id]) {
+                ans[prefix_id_x] = vs.size();
+            } else {
+                ans[prefix_id_x] =
+                    vs.subtraction_size_onethread<cur_pattern_vid>(
                         last_v_storage.subtraction_set[uid]);
+            }
         }
 
         unsigned long long val = 1;

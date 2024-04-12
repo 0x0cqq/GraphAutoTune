@@ -43,13 +43,16 @@ class Prefix {
         return std::equal(data, data + depth, other.begin());
     }
 
-    void output(int id, int father_id = -1) const {
+    void output(int id, int father_id = -1, int size_only = -1) const {
         std::cout << "Prefix " << id << ": ";
         for (int i = 0; i < depth; i++) {
             std::cout << data[i] << " ";
         }
         if (father_id != -1) {
             std::cout << "F: " << father_id;
+        }
+        if (size_only != -1) {
+            std::cout << " OS: " << size_only;
         }
         std::cout << std::endl;
     }
@@ -596,9 +599,10 @@ class Schedule {
     std::vector<Prefix> prefixs;
     // 第 i 个节点的 loop set 所用的 prefix
     std::vector<int> loop_set_prefix_id;
-    // 最后一个是第 i 个节点的 prefixes
+    // 最后一个是第 i 个节点的 prefixs
     std::vector<int> vertex_prefix_start;
     std::vector<int> prefixs_father;
+    std::vector<int> prefixs_size_only;
 
     // 限制
     std::vector<int> restrictions_start;
@@ -761,7 +765,7 @@ class Schedule {
         std::cout << "PREFIXS:" << std::endl;
         for (int i = 0; i < prefixs.size(); i++) {
             std::cout << "\t";
-            prefixs[i].output(i, prefixs_father[i]);
+            prefixs[i].output(i, prefixs_father[i], prefixs_size_only[i]);
         }
         std::cout << "Restrictions start: ";
         assert(restrictions_start.size() == basic_vertexes);
@@ -832,6 +836,23 @@ class Schedule {
                 current_start++;
             }
             restrictions_start.push_back(current_start);
+        }
+    }
+
+    void build_only_need_size() {
+        // 只要没有 child 的话，就只需要 size
+        std::vector<int> has_child(prefixs.size());
+        assert(prefixs.size() == prefixs_father.size());
+        for (int i = 0; i < prefixs.size(); i++) {
+            int f = prefixs_father[i];
+            if (f != -1) {
+                has_child[f] = 1;
+            }
+        }
+        prefixs_size_only.clear();
+        prefixs_size_only.resize(prefixs.size());
+        for (int i = 0; i < prefixs.size(); i++) {
+            prefixs_size_only[i] = has_child[i] == 1 ? 0 : 1;
         }
     }
 
@@ -927,6 +948,8 @@ class Schedule {
         // 把限制塞进去
         build_restrictions(best_restrictions);
         // TODO: IEP 的 redundancy
+
+        build_only_need_size();
     }
 };
 
@@ -958,8 +981,9 @@ struct ScheduleData {
     int basic_vertexes;
     int total_prefix_num;
     int total_restrictions_num;
-    Prefix prefixes[MAX_PREFIXS];
-    int prefix_fathers[MAX_PREFIXS];
+    Prefix prefixs[MAX_PREFIXS];
+    int prefixs_father[MAX_PREFIXS];
+    int prefixs_size_only[MAX_PREFIXS];
     int vertex_prefix_start[MAX_VERTEXES + 1];  // 这里要包括最后一个
     int loop_set_prefix_id[MAX_VERTEXES];
     int restrictions_start[MAX_VERTEXES + 1];  // 这里要包括最后一个
@@ -970,9 +994,12 @@ struct ScheduleData {
           total_prefix_num(schedule.prefixs.size()),
           iep_suffix_vertexes(schedule.iep_suffix_vertexes),
           iep_data(schedule.iep_info) {
+        assert(schedule.prefixs.size() == schedule.prefixs_father.size());
+        assert(schedule.prefixs.size() == schedule.prefixs_size_only.size());
         for (int i = 0; i < schedule.prefixs.size(); i++) {
-            prefixes[i] = schedule.prefixs[i];
-            prefix_fathers[i] = schedule.prefixs_father[i];
+            prefixs[i] = schedule.prefixs[i];
+            prefixs_father[i] = schedule.prefixs_father[i];
+            prefixs_size_only[i] = schedule.prefixs_size_only[i];
         }
         for (int i = 0; i < basic_vertexes; i++) {
             loop_set_prefix_id[i] = schedule.loop_set_prefix_id[i];

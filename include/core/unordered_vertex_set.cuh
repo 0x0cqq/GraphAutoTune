@@ -43,6 +43,16 @@ class UnorderedVertexSet {
         bool result = (lid < N) && (_data[lid] == val);
         return __any_sync(0xFFFFFFFF, result);
     }
+
+    template <size_t N>
+    __device__ bool has_data_single_thread(VIndex_t val) const {
+        bool result = false;
+#pragma unroll
+        for (size_t i = 0; i < N; i++) {
+            result |= (_data[i] == val);
+        }
+        return result;
+    }
 };
 
 }  // namespace Core

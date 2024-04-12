@@ -4,6 +4,7 @@
 
 #include <array>
 #include <concepts>
+#include <cub/cub.cuh>
 #include <nvfunctional>
 
 #include "configs/config.hpp"
@@ -65,11 +66,17 @@ class ArrayVertexSet {
 
     template <int depth, size_t SIZE>
     __device__ VIndex_t
-    subtraction_size_single_thread(const Core::UnorderedVertexSet<SIZE>& set);
+    subtraction_size_onethread(const Core::UnorderedVertexSet<SIZE>& set);
 
     // 对 Output 没有任何假设，除了空间是够的之外。
     // TODO: 或可以用 __restrict__ 修饰符加速
     __device__ void intersect(const ArrayVertexSet& a, const ArrayVertexSet& b);
+
+    // size 会保存到当前的 vertex
+    template <int depth, size_t SIZE>
+    __device__ void intersect_size(const ArrayVertexSet& a,
+                                   const ArrayVertexSet& b,
+                                   const Core::UnorderedVertexSet<SIZE>& set);
 };
 
 }  // namespace GPU
@@ -167,11 +174,11 @@ __device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
     int out_size = 0;
 
     for (int num_done = 0; num_done < na; num_done++) {
-        bool found = 0;
+        bool found = false;
         VIndex_t u = 0;
         if (num_done + lid < na) {
             u = a[num_done + lid];
-            search_dispatcher<config>(u, b, nb);
+            found = search_dispatcher<config>(u, b, nb);
         }
         if (found) out[out_size++] = u;
     }
@@ -204,9 +211,84 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
     assert(_allocated_size >= _size);
 }
 
+template <Config config, int depth, size_t SIZE>
+__device__ VIndex_t do_intersection_serial_size(
+    const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
+    const Core::UnorderedVertexSet<SIZE>& set) {
+    int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
+    int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
+    int out_size = 0;
+
+    VIndex_t u = 0;
+    bool found = false;
+    for (int num_done = 0; num_done < na; num_done++) {
+        if (num_done + lid < na) {
+            u = a[num_done + lid];
+            found = search_dispatcher<config>(u, b, nb) &
+                    !set.has_data_single_thread<depth>(u);
+        }
+        if (lid == 0) {
+            out_size++;
+        }
+    }
+    return out_size;
+}
+
+template <Config config, int depth, size_t SIZE>
+__device__ VIndex_t do_intersection_parallel_size(
+    const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
+    const Core::UnorderedVertexSet<SIZE>& set) {
+    int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
+    int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
+
+    typedef cub::WarpReduce<VIndex_t> WarpReduce;
+
+    __shared__ typename WarpReduce::TempStorage temp_storage[THREADS_PER_WARP];
+
+    VIndex_t out_size = 0;
+
+    for (int num_done = 0; num_done < na; num_done += THREADS_PER_WARP) {
+        bool found = false;
+        VIndex_t u = 0;
+        if (num_done + lid < na) {
+            u = a[num_done + lid];  // u: an element in set a
+            found = search_dispatcher<config>(u, b, nb) &&
+                    !set.has_data_single_thread<depth>(u);
+        }
+        out_size += found;
+    }
+
+    __syncwarp();
+    int aggregate = WarpReduce(temp_storage[wid]).Sum(out_size);
+    __syncwarp();
+    // only available in lid == 0
+    return aggregate;
+}
+
+template <Config config, int depth, size_t SIZE>
+__device__ VIndex_t do_intersection_dispatcher_size(
+    const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
+    const Core::UnorderedVertexSet<SIZE>& set) {
+    if constexpr (config.vertex_set_config.set_intersection_type == Parallel) {
+        return do_intersection_parallel_size<config, depth>(a, b, na, nb, set);
+    } else {
+        return do_intersection_serial_size<config, depth>(a, b, na, nb, set);
+    }
+}
+
 template <Config config>
 template <int depth, size_t SIZE>
-__device__ VIndex_t ArrayVertexSet<config>::subtraction_size_single_thread(
+__device__ void ArrayVertexSet<config>::intersect_size(
+    const ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b,
+    const Core::UnorderedVertexSet<SIZE>& set) {
+    // 一个低成本的计算交集大小的function
+    this->_size = do_intersection_dispatcher_size<config, depth>(
+        a.data(), b.data(), a.size(), b.size(), set);
+}
+
+template <Config config>
+template <int depth, size_t SIZE>
+__device__ VIndex_t ArrayVertexSet<config>::subtraction_size_onethread(
     const Core::UnorderedVertexSet<SIZE>& set) {
     // 这是只有一个线程的 version
     int ans = 0;

@@ -229,7 +229,8 @@ __host__ void Executor<config>::prepare() {
     }
 #endif
 
-    // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
+    // 构建 cur_pattern_vid 位置的 unit_extend_size
+    // 应用 restrictions 中的限制
     prepare_v_storage<config, cur_pattern_vid>(*device_context, prefix_storages,
                                                vertex_storages);
 
