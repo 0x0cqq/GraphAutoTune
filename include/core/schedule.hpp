@@ -340,18 +340,18 @@ std::vector<Restrictions> aggressive_optimize_get_all_pairs(const Pattern &p) {
 std::vector<Restrictions> restricts_generate(const Pattern &p) {
     std::vector<Restrictions> restrictions_list =
         aggressive_optimize_get_all_pairs(p);
-    std::cout << "  Aggressive Optimize: " << restrictions_list.size()
-              << " restrictions found." << std::endl;
+    // std::cout << "  Aggressive Optimize: " << restrictions_list.size()
+    //           << " restrictions found." << std::endl;
     std::vector<Restrictions> result_restrictions_list;
     int ans =
         naive_match_in_full_graph(p, {}) / get_isomorphism_multiplicity(p);
     for (const auto &restrictions : restrictions_list) {
         int cur_ans = naive_match_in_full_graph(p, restrictions);
-        std::cout << "    [";
-        for (const auto &p : restrictions) {
-            std::cout << "(" << p.first << ", " << p.second << ") ";
-        }
-        std::cout << "]. Ans: " << cur_ans << std::endl;
+        // std::cout << "    [";
+        // for (const auto &p : restrictions) {
+        //     std::cout << "(" << p.first << ", " << p.second << ") ";
+        // }
+        // std::cout << "]. Ans: " << cur_ans << std::endl;
         if (cur_ans == ans) {
             result_restrictions_list.push_back(restrictions);
         }
@@ -512,13 +512,14 @@ struct IEPHelperInfo {
     std::vector<IEPGroup> groups;  // 多个联通块的分割情况和系数
 
     void output() const {
-        std::cout << "IEPHelperInfo: " << std::endl;
-        std::cout << "iep_suffix_vertexes: " << iep_suffix_vertexes
+        std::cout << "IEPHelperInfo: ---" << std::endl;
+        std::cout << "Iep Suffix Vertexes: " << iep_suffix_vertexes
                   << std::endl;
-        std::cout << "groups: " << std::endl;
+        std::cout << "Groups: " << std::endl;
         for (const auto &group : groups) {
             group.output();
         }
+        std::cout << "------------------" << std::endl;
     }
 };
 
@@ -808,8 +809,9 @@ class Schedule {
         int current_prefix_id = 0;
         for (int i = 0; i < basic_vertexes; i++) {
             vertex_prefix_start.push_back(current_prefix_id);
-            while (prefixs[current_prefix_id]
-                       .data[prefixs[current_prefix_id].depth - 1] == i) {
+            while (current_prefix_id < prefixs.size() &&
+                   prefixs[current_prefix_id]
+                           .data[prefixs[current_prefix_id].depth - 1] == i) {
                 current_prefix_id++;
             }
         }
@@ -890,12 +892,12 @@ class Schedule {
                 have_best = false;
             }
 
-            std::cout << "Consider permutation with iep sum ["
-                      << iep_suffix_vertexes << "]: ";
-            for (int i = 0; i < perm.size(); i++) {
-                std::cout << perm[i] << " ";
-            }
-            std::cout << std::endl;
+            // std::cout << "Consider permutation with iep sum ["
+            //           << iep_suffix_vertexes << "]: ";
+            // for (int i = 0; i < perm.size(); i++) {
+            //     std::cout << perm[i] << " ";
+            // }
+            // std::cout << std::endl;
 
             // 获取所有可能的限制
             std::vector<Restrictions> all_restrictions =
@@ -903,11 +905,11 @@ class Schedule {
             for (const auto &restrictions : all_restrictions) {
                 double est = estimate_restrictions(new_p, restrictions, 5000,
                                                    1000000, 10000);
-                std::cout << "    Restrictions: [";
-                for (const auto &p : restrictions) {
-                    std::cout << "(" << p.first << ", " << p.second << ") ";
-                }
-                std::cout << "] Estimation: " << est << std::endl;
+                // std::cout << "    Restrictions: [";
+                // for (const auto &p : restrictions) {
+                //     std::cout << "(" << p.first << ", " << p.second << ") ";
+                // }
+                // std::cout << "] Estimation: " << est << std::endl;
 
                 if (!have_best || est < best_cost) {
                     have_best = true;
