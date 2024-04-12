@@ -147,6 +147,11 @@ __global__ void extend_v_storage_kernel(const DeviceContext<config> context,
         const auto &cur_subtraction_set =
             cur_v_storage.subtraction_set[cur_level_uid];
 
+        next_v_storage.last_level_uid[next_extend_uid] = cur_level_uid;
+        next_v_storage.loop_set_uid[next_extend_uid] = loop_set_uid;
+        next_v_storage.last_level_v_choose[next_extend_uid] = v;
+
+
         // 构造 subtraction_set
         next_v_storage.subtraction_set[next_extend_uid].copy_single_thread(
             cur_subtraction_set);
@@ -199,7 +204,8 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     const int end_prefix_id =
         context.schedule_data.vertex_prefix_start[cur_pattern_vid + 2];
 
-    // load 我们可能需要的所有 Prefix 到 shared memory
+    // load 我们可能需要的所有 Prefix 的 信息，这些后面都是公用的
+    // 到 shared memory
     __shared__ VertexSet *shared_vertex_set[MAX_PREFIXS],
         *father_vertex_set_shared[MAX_PREFIXS];
     const int tid = threadIdx.x;
@@ -224,26 +230,10 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
         int next_extend_uid = base + global_wid;
         if (next_extend_uid >= num_extend_units) continue;
 
-        int cur_level_uid =
-            next_v_storage
-                .prev_uid[next_extend_uid * MAX_VERTEXES + cur_pattern_vid];
-
         // 找到 Vertex 在 set 中的 Index
-        int base_index = cur_level_uid == 0
-                             ? 0
-                             : cur_v_storage.unit_extend_sum[cur_level_uid - 1];
-
-        int uid_in_total = start_extend_unit_id + next_extend_uid;
-
-        int vertex_index = uid_in_total - base_index;
-
-        // 找到 next_uid 在 loop_set_vertex_id 层的 uid
-        int loop_set_uid = find_prefix_level_uid<config>(
-            context, next_v_storage, loop_set_prefix_id, next_extend_uid);
-
-        // vertex set + index 获取 vertex_id
-        VIndex_t v =
-            loop_set_storage.vertex_set[loop_set_uid].get(vertex_index);
+        int cur_level_uid = next_v_storage.last_level_uid[next_extend_uid];
+        int loop_set_uid = next_v_storage.loop_set_uid[next_extend_uid];
+        VIndex_t v = next_v_storage.last_level_v_choose[next_extend_uid];
 
         const auto &cur_subtraction_set =
             cur_v_storage.subtraction_set[cur_level_uid];

@@ -20,6 +20,8 @@ constexpr int NUMS_UNIT = 10000;    // y 个 Vertex Set
 
 template <Config config>
 class VertexStorage {
+    using VertexSet = VertexSetTypeDispatcher<config>::type;
+
   public:
     DeviceType _device_type;
     // Unordered Vertex Set，记录了目前已经选择的节点的编号
@@ -33,6 +35,13 @@ class VertexStorage {
     VIndex_t* unit_extend_size;
     // 上面的前缀和
     VIndex_t* unit_extend_sum;
+
+    // 上一层对应的信息
+    VIndex_t* last_level_uid;
+    VIndex_t* last_level_v_choose;
+
+    // Loop Set 的 vertex
+    VIndex_t* loop_set_uid;
 
     // void* d_temp_storage;
     // size_t temp_storage_bytes;
@@ -49,15 +58,13 @@ class VertexStorage {
                 cudaMalloc(&unit_extend_size, sizeof(VIndex_t) * NUMS_UNIT));
             gpuErrchk(
                 cudaMalloc(&unit_extend_sum, sizeof(VIndex_t) * NUMS_UNIT));
+            gpuErrchk(
+                cudaMalloc(&last_level_uid, sizeof(VIndex_t) * NUMS_UNIT));
+            gpuErrchk(
+                cudaMalloc(&last_level_v_choose, sizeof(VIndex_t) * NUMS_UNIT));
+            gpuErrchk(cudaMalloc(&loop_set_uid, sizeof(VIndex_t) * NUMS_UNIT));
+
             num_units = 0;
-
-            // cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes,
-            //                               p_storage.unit_extend_size,
-            //                               p_storage.unit_extend_sum,
-            //                               NUMS_UNIT);
-
-            // // Allocate temporary storage for inclusive prefix sum
-            // gpuErrchk(cudaMalloc(&d_temp_storage, temp_storage_bytes));
         } else if (device_type == DeviceType::CPU_DEVICE) {
             subtraction_set =
                 new Core::UnorderedVertexSet<MAX_VERTEXES>[NUMS_UNIT];
@@ -65,9 +72,12 @@ class VertexStorage {
             unit_extend_size = new VIndex_t[NUMS_UNIT];
             unit_extend_sum = new VIndex_t[NUMS_UNIT];
 
+            last_level_uid = new VIndex_t[NUMS_UNIT];
+            last_level_v_choose = new VIndex_t[NUMS_UNIT];
+
+            loop_set_uid = new VIndex_t[NUMS_UNIT];
+
             num_units = 0;
-            // d_temp_storage = nullptr;
-            // temp_storage_bytes = 0;
         } else {
             assert(false);
         }
@@ -79,12 +89,17 @@ class VertexStorage {
             gpuErrchk(cudaFree(prev_uid));
             gpuErrchk(cudaFree(unit_extend_size));
             gpuErrchk(cudaFree(unit_extend_sum));
-            // gpuErrchk(cudaFree(d_temp_storage));
+            gpuErrchk(cudaFree(last_level_uid));
+            gpuErrchk(cudaFree(last_level_v_choose));
+            gpuErrchk(cudaFree(loop_set_uid));
         } else if (_device_type == DeviceType::CPU_DEVICE) {
             delete[] subtraction_set;
             delete[] prev_uid;
             delete[] unit_extend_size;
             delete[] unit_extend_sum;
+            delete[] last_level_uid;
+            delete[] last_level_v_choose;
+            delete[] loop_set_uid;
         } else {
             assert(false);
         }

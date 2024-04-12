@@ -88,7 +88,7 @@ class Executor {
         gpuErrchk(cudaDeviceSynchronize());
 
 #ifndef NDEBUG
-        std::cout << "Executor: Constructor Done.";
+        std::cout << "Executor: Constructor Done. ";
         print_device_memory();
 #endif
     }
