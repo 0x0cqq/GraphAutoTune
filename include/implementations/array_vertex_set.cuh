@@ -20,37 +20,40 @@ __device__ unsigned long long counter = 0;
 template <Config config>
 class ArrayVertexSet {
   private:
-    VIndex_t _size;
+    // 前两者是分配的空间
     VIndex_t _allocated_size;
+    VIndex_t* _space;
+    // 后两者是实际使用的空间
+    VIndex_t _size;
     VIndex_t* _data;
 
   public:
+    // 这个函数是 Init 函数，只会在程序开始的时候调用
     __device__ void init_empty(VIndex_t* space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         const int lid = threadIdx.x % THREADS_PER_WARP;
         if (lid == 0) {
-            _data = space, _allocated_size = storage_size, _size = 0;
+            _space = space, _data = space;
+            _allocated_size = storage_size, _size = 0;
         }
     }
 
+    // 这个函数只是用来临时创建空间的，比如给 neighbor vertex 临时给一个 Vertex
+    // Set
     __device__ void init(VIndex_t* input_data, VIndex_t input_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         const int lid = threadIdx.x % THREADS_PER_WARP;
         if (lid == 0) {
-            _data = input_data, _allocated_size = _size = input_size;
+            _data = input_data, _size = input_size;
+            _space = nullptr, _allocated_size = 0;
         }
     }
 
-    __device__ void init_copy(const VIndex_t* input_data, VIndex_t input_size) {
+    __device__ void use_copy(VIndex_t* input_data, VIndex_t input_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         const int lid = threadIdx.x % THREADS_PER_WARP;
-        assert(_allocated_size >= input_size);
-        for (VIndex_t base = 0; base < input_size; base += THREADS_PER_WARP) {
-            VIndex_t i = base + lid;
-            if (i < input_size) _data[i] = input_data[i];
-        }
         if (lid == 0) {
-            _size = input_size;
+            _size = input_size, _data = input_data;
         }
     }
 
@@ -205,6 +208,7 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
     }
     __syncthreads();
 
+    this->_data = this->_space;
     VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
         this->data(), a.data(), b.data(), a.size(), b.size());
     this->_size = after_intersect_size;

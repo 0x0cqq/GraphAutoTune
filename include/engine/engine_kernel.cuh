@@ -44,7 +44,7 @@ __global__ void first_extend_kernel(DeviceContext<config> context,
 
         VIndex_t *neighbors = context.graph_backend.get_neigh(vid);
         VIndex_t neighbors_cnt = context.graph_backend.get_neigh_cnt(vid);
-        p_storage.vertex_set[uid].init_copy(neighbors, neighbors_cnt);
+        p_storage.vertex_set[uid].use_copy(neighbors, neighbors_cnt);
         if (lane_id == 0) {
             v_storage.subtraction_set[uid].set<0>(vid);
             v_storage.prev_uid[uid * MAX_VERTEXES + 0] = uid;
@@ -277,8 +277,8 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
             int father_prefix_id =
                 context.schedule_data.prefixs_father[cur_prefix_id];
             if (father_prefix_id == -1) {
-                // 没有 father，直接 copy 邻居
-                next_vertex_set.init_copy(neighbors, neighbors_cnt);
+                // 没有 father，直接使用邻居
+                next_vertex_set.use_copy(neighbors, neighbors_cnt);
             } else {
                 // 如果有 father，那么需要和 father 的 vertex set 取交集
                 int father_unit_id = find_prefix_level_uid<config>(
