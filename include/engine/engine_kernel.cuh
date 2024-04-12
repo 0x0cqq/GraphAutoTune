@@ -224,8 +224,6 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
         int next_extend_uid = base + global_wid;
         if (next_extend_uid >= num_extend_units) continue;
 
-        int uid_in_total = start_extend_unit_id + next_extend_uid;
-
         int cur_level_uid =
             next_v_storage
                 .prev_uid[next_extend_uid * MAX_VERTEXES + cur_pattern_vid];
@@ -234,6 +232,9 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
         int base_index = cur_level_uid == 0
                              ? 0
                              : cur_v_storage.unit_extend_sum[cur_level_uid - 1];
+
+        int uid_in_total = start_extend_unit_id + next_extend_uid;
+
         int vertex_index = uid_in_total - base_index;
 
         // 找到 next_uid 在 loop_set_vertex_id 层的 uid

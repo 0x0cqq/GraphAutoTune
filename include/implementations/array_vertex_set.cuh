@@ -206,13 +206,13 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
     if (lane_id == 0) {
         atomicAdd(&counter, 1);
     }
-    __syncthreads();
+    __syncwarp();
+
+    VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
+        this->_space, a.data(), b.data(), a.size(), b.size());
 
     this->_data = this->_space;
-    VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
-        this->data(), a.data(), b.data(), a.size(), b.size());
     this->_size = after_intersect_size;
-    assert(_allocated_size >= _size);
 }
 
 template <Config config, int depth, size_t SIZE>

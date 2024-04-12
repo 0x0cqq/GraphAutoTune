@@ -1,5 +1,6 @@
 #pragma once
 #include <nvtx3/nvToolsExt.h>
+#include <thrust/binary_search.h>
 #include <thrust/device_ptr.h>
 
 #include <array>
@@ -36,11 +37,6 @@ class Executor {
     // 用于 cub device prefix 的空间
     void *d_prefix_temp_storage = nullptr;
     size_t temp_storage_bytes = 0;
-
-    // 用于更新下一层的 Unit 的信息
-    // end_unit: cur_level 的结束
-    // total_units: 下一层总共会有多少 units
-    int *end_unit, *total_units;
 
     // 存储一些恒定的 Context，例如 Schedule 和 Graph Backend
     DeviceContext<config> *device_context;
@@ -89,10 +85,6 @@ class Executor {
             d_prefix_temp_storage, temp_storage_bytes, temp, temp, NUMS_UNIT));
         gpuErrchk(cudaMalloc(&d_prefix_temp_storage, temp_storage_bytes));
 
-        // 为了更新下一层的 Unit 信息
-        gpuErrchk(cudaMallocManaged(&end_unit, sizeof(int)));
-        gpuErrchk(cudaMallocManaged(&total_units, sizeof(int)));
-
         gpuErrchk(cudaDeviceSynchronize());
 
 #ifndef NDEBUG
@@ -111,9 +103,6 @@ class Executor {
 
         gpuErrchk(cudaFree(d_ans));
         gpuErrchk(cudaFree(d_prefix_temp_storage));
-
-        gpuErrchk(cudaFree(end_unit));
-        gpuErrchk(cudaFree(total_units));
     }
 
     __host__ void set_context(DeviceContext<config> &context) {
@@ -272,19 +261,25 @@ __host__ bool Executor<config>::extend() {
 
     // cur_unit: cur_level 当前 extend 开始的 Unit
     int cur_unit = cur_progress[cur_pattern_vid];
+    const auto &v_storage = vertex_storages[cur_pattern_vid];
 
-    get_next_unit_kernel<config><<<1, 1>>>(cur_unit, end_unit, total_units,
-                                           NUMS_UNIT,
-                                           vertex_storages[cur_pattern_vid]);
+    if (cur_unit == v_storage.num_units) return false;
 
-    gpuErrchk(cudaDeviceSynchronize());
-    gpuErrchk(cudaPeekAtLastError());
+    thrust::device_ptr<VIndex_t> extend_sum(v_storage.unit_extend_sum);
+    VIndex_t current_unit_size = cur_unit == 0 ? 0 : extend_sum[cur_unit - 1];
 
-    if (*end_unit == cur_unit) return false;
-    cur_progress[cur_pattern_vid] = *end_unit;
+    VIndex_t end_unit =
+        thrust::upper_bound(extend_sum, extend_sum + v_storage.num_units,
+                            current_unit_size + NUMS_UNIT) -
+        extend_sum;
+
+    cur_progress[cur_pattern_vid] = end_unit;
 
     // cur_pattern_vid + 1 位置总共有这么多 Unit
-    vertex_storages[cur_pattern_vid + 1].num_units = *total_units;
+
+    VIndex_t end_unit_size = extend_sum[end_unit - 1];
+    VIndex_t total_units = end_unit_size - current_unit_size;
+    vertex_storages[cur_pattern_vid + 1].num_units = total_units;
 #ifndef NDEBUG
 
     // thrust::device_ptr<VIndex_t> d_ptr(
@@ -294,8 +289,8 @@ __host__ bool Executor<config>::extend() {
 
     if (cur_pattern_vid < LOG_DEPTH) {
         std::cout << "Level " << cur_pattern_vid << ": extend range: ["
-                  << cur_unit << "," << *end_unit
-                  << "), total next level units:" << *total_units << std::endl;
+                  << cur_unit << "," << end_unit
+                  << "), total next level units:" << total_units << std::endl;
     }
 
     //   << "start: " << start << ", end: " << end << std::endl;
@@ -303,10 +298,10 @@ __host__ bool Executor<config>::extend() {
 #endif
 
     extend_v_storage<config, cur_pattern_vid>(
-        *device_context, prefix_storages, vertex_storages, cur_unit, *end_unit);
+        *device_context, prefix_storages, vertex_storages, cur_unit, end_unit);
 
     extend_p_storage<config, cur_pattern_vid>(
-        *device_context, prefix_storages, vertex_storages, cur_unit, *end_unit);
+        *device_context, prefix_storages, vertex_storages, cur_unit, end_unit);
 
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaPeekAtLastError());
