@@ -65,9 +65,9 @@ class ArrayVertexSet {
 
     __device__ inline void clear() { _size = 0; }
 
-    __device__ inline size_t storage_space() const { return _allocated_size; }
+    __device__ inline int storage_space() const { return _allocated_size; }
 
-    template <int depth, size_t SIZE>
+    template <int depth, int SIZE>
     __device__ VIndex_t
     subtraction_size_onethread(const Core::UnorderedVertexSet<SIZE>& set);
 
@@ -76,7 +76,7 @@ class ArrayVertexSet {
     __device__ void intersect(const ArrayVertexSet& a, const ArrayVertexSet& b);
 
     // size 会保存到当前的 vertex
-    template <int depth, size_t SIZE>
+    template <int depth, int SIZE>
     __device__ void intersect_size(const ArrayVertexSet& a,
                                    const ArrayVertexSet& b,
                                    const Core::UnorderedVertexSet<SIZE>& set);
@@ -215,7 +215,7 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
     this->_size = after_intersect_size;
 }
 
-template <Config config, int depth, size_t SIZE>
+template <Config config, int depth, int SIZE>
 __device__ VIndex_t do_intersection_serial_size(
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
@@ -238,7 +238,7 @@ __device__ VIndex_t do_intersection_serial_size(
     return out_size;
 }
 
-template <Config config, int depth, size_t SIZE>
+template <Config config, int depth, int SIZE>
 __device__ VIndex_t do_intersection_parallel_size(
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
@@ -269,7 +269,7 @@ __device__ VIndex_t do_intersection_parallel_size(
     return aggregate;
 }
 
-template <Config config, int depth, size_t SIZE>
+template <Config config, int depth, int SIZE>
 __device__ VIndex_t do_intersection_dispatcher_size(
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
@@ -281,7 +281,7 @@ __device__ VIndex_t do_intersection_dispatcher_size(
 }
 
 template <Config config>
-template <int depth, size_t SIZE>
+template <int depth, int SIZE>
 __device__ void ArrayVertexSet<config>::intersect_size(
     const ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b,
     const Core::UnorderedVertexSet<SIZE>& set) {
@@ -291,7 +291,7 @@ __device__ void ArrayVertexSet<config>::intersect_size(
 }
 
 template <Config config>
-template <int depth, size_t SIZE>
+template <int depth, int SIZE>
 __device__ VIndex_t ArrayVertexSet<config>::subtraction_size_onethread(
     const Core::UnorderedVertexSet<SIZE>& set) {
     // 这是只有一个线程的 version

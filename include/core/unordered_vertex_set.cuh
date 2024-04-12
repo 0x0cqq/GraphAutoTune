@@ -7,18 +7,18 @@
 namespace Core {
 
 // 这个是用来存储已经遍历的节点
-template <size_t SIZE>
+template <int SIZE>
 requires(SIZE < THREADS_PER_WARP)
 class UnorderedVertexSet {
     VIndex_t _data[SIZE];
 
   public:
-    template <size_t pos>
+    template <int pos>
     __device__ void set(VIndex_t val) {
         _data[pos] = val;
     }
 
-    __device__ VIndex_t get(size_t pos) const { return _data[pos]; }
+    __device__ VIndex_t get(int pos) const { return _data[pos]; }
 
     __device__ void clear() {
         const int lid = threadIdx.x % THREADS_PER_WARP;
@@ -32,23 +32,23 @@ class UnorderedVertexSet {
 
     __device__ void copy_single_thread(const UnorderedVertexSet<SIZE>& other) {
 #pragma unroll
-        for (size_t i = 0; i < SIZE; i++) {
+        for (int i = 0; i < SIZE; i++) {
             _data[i] = other._data[i];
         }
     }
 
-    template <size_t N>
+    template <int N>
     __device__ bool has_data(VIndex_t val) const {
         const int lid = threadIdx.x % THREADS_PER_WARP;
         bool result = (lid < N) && (_data[lid] == val);
         return __any_sync(0xFFFFFFFF, result);
     }
 
-    template <size_t N>
+    template <int N>
     __device__ bool has_data_single_thread(VIndex_t val) const {
         bool result = false;
 #pragma unroll
-        for (size_t i = 0; i < N; i++) {
+        for (int i = 0; i < N; i++) {
             result |= (_data[i] == val);
         }
         return result;

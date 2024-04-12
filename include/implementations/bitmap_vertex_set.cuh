@@ -13,7 +13,7 @@ template <Config config>
 class BitmapVertexSet {
   private:
     VIndex_t *_data;  // 用 VIndex_t 保持兼容性
-    size_t _storage_space;
+    int _storage_space;
     VIndex_t _non_zero_cnt;
 
   public:
@@ -32,7 +32,7 @@ class BitmapVertexSet {
 
     __device__ VIndex_t *data() const { return _data; }
 
-    __device__ size_t storage_space() { return _storage_space; }
+    __device__ int storage_space() { return _storage_space; }
 
     __device__ VIndex_t size() { return _non_zero_cnt; }
 
@@ -65,14 +65,14 @@ void prepare_bitmap_data_cpu(const VIndex_t *data, VIndex_t size,
     }
 }
 
-__device__ uint32_t calculate_non_zero_cnt(VIndex_t *data, size_t size) {
+__device__ uint32_t calculate_non_zero_cnt(VIndex_t *data, int size) {
     // warp reduce version
     typedef cub::WarpReduce<uint32_t> WarpReduce;
     __shared__ typename WarpReduce::TempStorage temp_storage[WARPS_PER_BLOCK];
     const int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
     const int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
     uint32_t sum = 0;
-    for (size_t index = 0; index < size; index += THREADS_PER_WARP)
+    for (int index = 0; index < size; index += THREADS_PER_WARP)
         if (index + lid < size) sum += __popc(data[index + lid]);
     __syncwarp();
     uint32_t aggregate = WarpReduce(temp_storage[wid]).Sum(sum);
