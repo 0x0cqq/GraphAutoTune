@@ -195,6 +195,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     }
 
     __threadfence_block();
+    __syncthreads();
 
     for (int base = 0; base < num_extend_units; base += num_total_warps) {
         int next_extend_uid = base + global_wid;

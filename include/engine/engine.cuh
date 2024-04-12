@@ -179,6 +179,9 @@ __host__ void Executor<config>::search() {
     // 直到本层全部被拓展完完成
     for (int base = 0; base < extend_total_units; base += NUMS_UNIT) {
         int num = min(extend_total_units - base, NUMS_UNIT);
+
+        // std::cout << "Base: " << base << ", Num: " << num << std::endl;
+
         extend<cur_pattern_vid>(base, num);
         // 对下一层递归进行搜素
         // 这句 if constexpr 不能缺少，否则会导致编译器无限递归
