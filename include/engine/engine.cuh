@@ -41,17 +41,14 @@ class Executor {
     // 存储一些恒定的 Context，例如 Schedule 和 Graph Backend
     DeviceContext<config> *device_context;
 
-    // Extend 的进度（考虑合并进 cur_progress 里面）
-    int cur_progress[MAX_VERTEXES];
-
     template <int cur_pattern_vid>
     __host__ void search();
 
     template <int cur_pattern_vid>
-    __host__ void prepare();
+    __host__ void prepare(VIndex_t &extend_total_units);
 
     template <int cur_pattern_vid>
-    __host__ bool extend();
+    __host__ void extend(int base_extend_unit_id, int num_extend_units);
 
     template <int cur_pattern_vid>
     __host__ void final_step();
@@ -109,18 +106,9 @@ class Executor {
         device_context = &context;
     }
 
-    __host__ void do_extend_size_sum(VertexStorage<config> &v_storage) {
-        // Run inclusive prefix sum
-        gpuErrchk(cub::DeviceScan::InclusiveSum(
-            d_prefix_temp_storage, temp_storage_bytes,
-            v_storage.unit_extend_size, v_storage.unit_extend_sum,
-            v_storage.num_units));
-    }
-
+    // 通过 thrust::reduce 求和所有的 Unit 的 d_ans
     __host__ unsigned long long reduce_answer() {
-        // 通过 thrust::reduce 求和
         thrust::device_ptr<unsigned long long> ans_ptr(d_ans);
-        // 需要求和所有的 Unit
         return thrust::reduce(ans_ptr, ans_ptr + NUMS_UNIT);
     }
 
@@ -158,8 +146,6 @@ __host__ unsigned long long Executor<config>::perform_search(
     }
 
     // 从 d_ans 里面把答案取出来
-    // 最后这里调用了 thrust
-    // 把 thrust 从其他地方摘走 自己写
     return reduce_answer();
 }
 
@@ -182,13 +168,18 @@ __host__ void Executor<config>::search() {
 
     // 构建 v_storages[cur_pattern_vid] 的 unit_extend_size & sum
     // 也就是向 cur_pattern_vid + 1 扩展的前置工作
-    prepare<cur_pattern_vid>();
+    VIndex_t extend_total_units = 0;
+    prepare<cur_pattern_vid>(extend_total_units);
 
-    // 重置本层的扩展进度
-    cur_progress[cur_pattern_vid] = 0;
+    // 等待下一回合的结果被拷贝回来
+    gpuErrchk(cudaStreamSynchronize(0));
+
+    // std::cout << "Extend Total Units: " << extend_total_units << std::endl;
 
     // 直到本层全部被拓展完完成
-    while (extend<cur_pattern_vid>()) {
+    for (int base = 0; base < extend_total_units; base += NUMS_UNIT) {
+        int num = min(extend_total_units - base, NUMS_UNIT);
+        extend<cur_pattern_vid>(base, num);
         // 对下一层递归进行搜素
         // 这句 if constexpr 不能缺少，否则会导致编译器无限递归
         // 不用特化的原因是，模板类中，成员函数无法单独特化
@@ -211,7 +202,7 @@ __host__ void Executor<config>::search() {
 // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size & sum
 template <Config config>
 template <int cur_pattern_vid>
-__host__ void Executor<config>::prepare() {
+__host__ void Executor<config>::prepare(VIndex_t &extend_total_units) {
 #ifndef NDEBUG
     auto start = std::chrono::high_resolution_clock::now();
     if (cur_pattern_vid < LOG_DEPTH) {
@@ -226,18 +217,21 @@ __host__ void Executor<config>::prepare() {
                                                vertex_storages);
 
     auto &v_storage = vertex_storages[cur_pattern_vid];
+
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_sum
-    do_extend_size_sum(v_storage);
+    gpuErrchk(cub::DeviceScan::InclusiveSum(
+        d_prefix_temp_storage, temp_storage_bytes, v_storage.unit_extend_size,
+        v_storage.unit_extend_sum, v_storage.num_units));
+
+    // copy out sum 的结果，只需要最后一位
+    // 注意这里是 Async，后面需要同步
+    gpuErrchk(
+        cudaMemcpyAsync(&extend_total_units,
+                        v_storage.unit_extend_sum + v_storage.num_units - 1,
+                        sizeof(VIndex_t), cudaMemcpyDeviceToHost));
 
 #ifndef NDEBUG
     if (cur_pattern_vid < LOG_DEPTH) {
-        thrust::device_ptr<VIndex_t> unit_extend_size(
-            v_storage.unit_extend_size);
-        std::cout << "Units extend size: ";
-        for (int i = 0; i < v_storage.num_units; i++) {
-            std::cout << unit_extend_size[i] << " ";
-        }
-        std::cout << std::endl;
         auto end = std::chrono::high_resolution_clock::now();
         auto duration =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -249,7 +243,8 @@ __host__ void Executor<config>::prepare() {
 
 template <Config config>
 template <int cur_pattern_vid>
-__host__ bool Executor<config>::extend() {
+__host__ void Executor<config>::extend(int base_extend_unit_id,
+                                       int num_extend_units) {
 #ifndef NDEBUG
     auto time_start = std::chrono::high_resolution_clock::now();
     if (cur_pattern_vid < LOG_DEPTH) {
@@ -258,49 +253,14 @@ __host__ bool Executor<config>::extend() {
     }
 #endif
 
-    // cur_unit: cur_level 当前 extend 开始的 Unit
-    int cur_unit = cur_progress[cur_pattern_vid];
-    const auto &v_storage = vertex_storages[cur_pattern_vid];
-
-    if (cur_unit == v_storage.num_units) return false;
-
-    thrust::device_ptr<VIndex_t> extend_sum(v_storage.unit_extend_sum);
-    VIndex_t current_unit_size = cur_unit == 0 ? 0 : extend_sum[cur_unit - 1];
-
-    VIndex_t end_unit =
-        thrust::upper_bound(extend_sum, extend_sum + v_storage.num_units,
-                            current_unit_size + NUMS_UNIT) -
-        extend_sum;
-
-    cur_progress[cur_pattern_vid] = end_unit;
-
-    // cur_pattern_vid + 1 位置总共有这么多 Unit
-
-    VIndex_t end_unit_size = extend_sum[end_unit - 1];
-    VIndex_t total_units = end_unit_size - current_unit_size;
-    vertex_storages[cur_pattern_vid + 1].num_units = total_units;
-#ifndef NDEBUG
-
-    // thrust::device_ptr<VIndex_t> d_ptr(
-    //     vertex_storages[cur_pattern_vid].unit_extend_sum);
-
-    // VIndex_t start = d_ptr[cur_unit - 1], end = d_ptr[*end_unit - 1];
-
-    if (cur_pattern_vid < LOG_DEPTH) {
-        std::cout << "Level " << cur_pattern_vid << ": extend range: ["
-                  << cur_unit << "," << end_unit
-                  << "), total next level units:" << total_units << std::endl;
-    }
-
-    //   << "start: " << start << ", end: " << end << std::endl;
-
-#endif
+    vertex_storages[cur_pattern_vid + 1].num_units = num_extend_units;
 
     extend_v_storage<config, cur_pattern_vid>(
-        *device_context, prefix_storages, vertex_storages, cur_unit, end_unit);
+        *device_context, prefix_storages, vertex_storages, base_extend_unit_id,
+        num_extend_units);
 
     extend_p_storage<config, cur_pattern_vid>(
-        *device_context, prefix_storages, vertex_storages, cur_unit, end_unit);
+        *device_context, prefix_storages, vertex_storages, num_extend_units);
 
 #ifndef NDEBUG
     auto time_end = std::chrono::high_resolution_clock::now();
@@ -311,8 +271,6 @@ __host__ bool Executor<config>::extend() {
                   << ", time " << duration.count() << " ms" << std::endl;
     }
 #endif
-
-    return true;
 }
 
 template <Config config>

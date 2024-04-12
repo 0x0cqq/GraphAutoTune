@@ -101,26 +101,22 @@ __global__ void extend_v_storage_kernel(const DeviceContext<config> context,
                                         int loop_set_prefix_id,
                                         VertexStorage<config> cur_v_storage,
                                         VertexStorage<config> next_v_storage,
-                                        int start_uid, int end_uid) {
+                                        int base_extend_unit_id,
+                                        int num_extend_units) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     const int global_tid = blockIdx.x * blockDim.x + threadIdx.x;
     const int num_threads = gridDim.x * blockDim.x;
-
-    int start_extend_unit_id =
-        start_uid == 0 ? 0 : cur_v_storage.unit_extend_sum[start_uid - 1];
-    int end_extend_unit_id = cur_v_storage.unit_extend_sum[end_uid - 1];
-    int num_extend_units = end_extend_unit_id - start_extend_unit_id;
 
     for (int base = 0; base < num_extend_units; base += num_threads) {
         int next_extend_uid = base + global_tid;
         if (next_extend_uid >= num_extend_units) continue;
 
-        int uid_in_total = start_extend_unit_id + next_extend_uid;
+        int uid_in_total = base_extend_unit_id + next_extend_uid;
 
         // 从下一个点的 uid 反推到上一层的 Unit 和 Vertex，二分查找
         int cur_level_uid =
-            find_prev_index(cur_v_storage.unit_extend_sum, start_uid,
-                            end_uid - 1, uid_in_total);
+            find_prev_index(cur_v_storage.unit_extend_sum, 0,
+                            cur_v_storage.num_units - 1, uid_in_total);
 
         for (int i = 0; i <= cur_pattern_vid; i++) {
             next_v_storage.prev_uid[next_extend_uid * MAX_VERTEXES + i] =
@@ -166,7 +162,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
                                         PrefixStorages<config> p_storages,
                                         VertexStorage<config> cur_v_storage,
                                         VertexStorage<config> next_v_storage,
-                                        int start_uid, int end_uid) {
+                                        int num_extend_units) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     __shared__ VertexSet new_vertex_sets[WARPS_PER_BLOCK];
 
@@ -199,12 +195,6 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     }
 
     __threadfence_block();
-
-    // 下一个点的 uid 的数量，开始和结束的位置
-    int start_extend_unit_id =
-        start_uid == 0 ? 0 : cur_v_storage.unit_extend_sum[start_uid - 1];
-    int end_extend_unit_id = cur_v_storage.unit_extend_sum[end_uid - 1];
-    int num_extend_units = end_extend_unit_id - start_extend_unit_id;
 
     for (int base = 0; base < num_extend_units; base += num_total_warps) {
         int next_extend_uid = base + global_wid;
@@ -318,22 +308,6 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
     }
 }
 
-template <Config config>
-__global__ void get_next_unit_kernel(int current_unit, int *next_unit,
-                                     int *next_total_units, int num_units,
-                                     VertexStorage<config> v_storage) {
-    VIndex_t current_unit_size =
-        current_unit == 0 ? 0 : v_storage.unit_extend_sum[current_unit - 1];
-    VIndex_t next_size = current_unit_size + num_units;
-    *next_unit = current_unit;
-    while (*next_unit < v_storage.num_units &&
-           v_storage.unit_extend_sum[*next_unit] < next_size) {
-        (*next_unit)++;
-    }
-    *next_total_units =
-        v_storage.unit_extend_sum[*next_unit - 1] - current_unit_size;
-}
-
 // 按照 IEP Info 的提示去计算出每一个 Unit 对应的答案，放到某个数组里面
 template <Config config, int cur_pattern_vid>
 __global__ void get_iep_answer_kernel(DeviceContext<config> context,
@@ -412,8 +386,8 @@ void prepare_v_storage(DeviceContext<config> &context,
 template <Config config, int cur_pattern_vid>
 void extend_v_storage(const DeviceContext<config> context,
                       PrefixStorages<config> p_storages,
-                      VertexStorages<config> v_storages, int start_uid,
-                      int end_uid) {
+                      VertexStorages<config> v_storages,
+                      int base_extend_unit_id, int num_extend_units) {
     const auto &cur_v_storage = v_storages[cur_pattern_vid];
     const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
 
@@ -423,23 +397,23 @@ void extend_v_storage(const DeviceContext<config> context,
     const auto &loop_set_storage = p_storages[loop_set_prefix_id];
 
     extend_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, loop_set_storage,
-                                            loop_set_prefix_id, cur_v_storage,
-                                            next_v_storage, start_uid, end_uid);
+        <<<num_blocks, THREADS_PER_BLOCK>>>(
+            context, loop_set_storage, loop_set_prefix_id, cur_v_storage,
+            next_v_storage, base_extend_unit_id, num_extend_units);
 }
 
 template <Config config, int cur_pattern_vid>
 void extend_p_storage(DeviceContext<config> &context,
                       PrefixStorages<config> &prefix_storages,
-                      VertexStorages<config> &vertex_storages, int start_uid,
-                      int end_uid) {
+                      VertexStorages<config> &vertex_storages,
+                      int num_extend_units) {
     const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
     const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
 
     extend_p_storage_kernel<config, cur_pattern_vid>
         <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
                                             cur_v_storage, next_v_storage,
-                                            start_uid, end_uid);
+                                            num_extend_units);
 }
 
 }  // namespace Engine
