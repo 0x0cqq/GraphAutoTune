@@ -117,14 +117,14 @@ class GlobalMemoryGraph {
         _edges = d_edges;
     }
 
-    __host__ __device__ VIndex_t v_cnt() const { return this->_v_cnt; }
-    __host__ __device__ EIndex_t e_cnt() const { return this->_e_cnt; }
-    __host__ __device__ EIndex_t *vertexes() const { return this->_vertexes; }
-    __host__ __device__ VIndex_t *edges() const { return this->_edges; }
-    __host__ __device__ VIndex_t *get_neigh(VIndex_t v) const {
+    __host__ __device__ inline VIndex_t v_cnt() const { return this->_v_cnt; }
+    __host__ __device__ inline EIndex_t e_cnt() const { return this->_e_cnt; }
+    __host__ __device__ inline EIndex_t *vertexes() const { return this->_vertexes; }
+    __host__ __device__ inline VIndex_t *edges() const { return this->_edges; }
+    __host__ __device__ inline VIndex_t *get_neigh(VIndex_t v) const {
         return _edges + _vertexes[v];
     }
-    __host__ __device__ VIndex_t get_neigh_cnt(VIndex_t v) const {
+    __host__ __device__ inline VIndex_t get_neigh_cnt(VIndex_t v) const {
         return _vertexes[v + 1] - _vertexes[v];
     }
 

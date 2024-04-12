@@ -158,6 +158,8 @@ __host__ unsigned long long Executor<config>::perform_search(
     }
 
     // 从 d_ans 里面把答案取出来
+    // 最后这里调用了 thrust
+    // 把 thrust 从其他地方摘走 自己写
     return reduce_answer();
 }
 
@@ -222,9 +224,6 @@ __host__ void Executor<config>::prepare() {
     // 应用 restrictions 中的限制
     prepare_v_storage<config, cur_pattern_vid>(*device_context, prefix_storages,
                                                vertex_storages);
-
-    gpuErrchk(cudaDeviceSynchronize());
-    gpuErrchk(cudaPeekAtLastError());
 
     auto &v_storage = vertex_storages[cur_pattern_vid];
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_sum
@@ -303,9 +302,6 @@ __host__ bool Executor<config>::extend() {
     extend_p_storage<config, cur_pattern_vid>(
         *device_context, prefix_storages, vertex_storages, cur_unit, end_unit);
 
-    gpuErrchk(cudaDeviceSynchronize());
-    gpuErrchk(cudaPeekAtLastError());
-
 #ifndef NDEBUG
     auto time_end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -337,9 +333,6 @@ __host__ void Executor<config>::final_step() {
     get_iep_answer_kernel<config, cur_pattern_vid>
         <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
                                             vertex_storages, d_ans);
-
-    gpuErrchk(cudaDeviceSynchronize());
-    gpuErrchk(cudaPeekAtLastError());
 
 #ifndef NDEBUG
     auto time_end = std::chrono::high_resolution_clock::now();

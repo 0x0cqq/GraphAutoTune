@@ -79,8 +79,8 @@ __device__ inline int find_prefix_level_uid(
     return find_father(vertex_id, v_storage, uid);
 }
 
-__device__ VIndex_t find_prev_index(VIndex_t *sum, int l, int r,
-                                    VIndex_t target_value) {
+__device__ inline VIndex_t find_prev_index(VIndex_t *sum, int l, int r,
+                                           VIndex_t target_value) {
     int mid = 0;
     VIndex_t mid_value = 0;
     while (l != r) {
@@ -151,32 +151,12 @@ __global__ void extend_v_storage_kernel(const DeviceContext<config> context,
         next_v_storage.loop_set_uid[next_extend_uid] = loop_set_uid;
         next_v_storage.last_level_v_choose[next_extend_uid] = v;
 
-
         // 构造 subtraction_set
         next_v_storage.subtraction_set[next_extend_uid].copy_single_thread(
             cur_subtraction_set);
         next_v_storage.subtraction_set[next_extend_uid]
             .set<cur_pattern_vid + 1>(v);
     }
-}
-
-template <Config config, int cur_pattern_vid>
-void extend_v_storage(const DeviceContext<config> context,
-                      PrefixStorages<config> p_storages,
-                      VertexStorages<config> v_storages, int start_uid,
-                      int end_uid) {
-    const auto &cur_v_storage = v_storages[cur_pattern_vid];
-    const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
-
-    // 下一个点的 loop_set_prefix_id
-    const int loop_set_prefix_id =
-        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
-    const auto &loop_set_storage = p_storages[loop_set_prefix_id];
-
-    extend_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, loop_set_storage,
-                                            loop_set_prefix_id, cur_v_storage,
-                                            next_v_storage, start_uid, end_uid);
 }
 
 // 设置 v_storage[cur_pattern_vid] 的 prev_uid, subtraction_set
@@ -290,20 +270,6 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     }
 }
 
-template <Config config, int cur_pattern_vid>
-void extend_p_storage(DeviceContext<config> &context,
-                      PrefixStorages<config> &prefix_storages,
-                      VertexStorages<config> &vertex_storages, int start_uid,
-                      int end_uid) {
-    const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
-    const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
-
-    extend_p_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
-                                            cur_v_storage, next_v_storage,
-                                            start_uid, end_uid);
-}
-
 // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size
 // p_storage 是对应 loop_set_prefix_id 位置的 Prefix
 template <Config config, int cur_pattern_vid>
@@ -350,21 +316,6 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
                         p_storage.vertex_set[loop_set_uid].size(), min_vertex);
         v_storage.unit_extend_size[uid] = size_after_restrict;
     }
-}
-
-template <Config config, int cur_pattern_vid>
-void prepare_v_storage(DeviceContext<config> &context,
-                       PrefixStorages<config> &prefix_storages,
-                       VertexStorages<config> &vertex_storages) {
-    const auto &v_storage = vertex_storages[cur_pattern_vid];
-
-    int loop_set_prefix_id =
-        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
-    const auto &p_storage = prefix_storages[loop_set_prefix_id];
-
-    prepare_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, p_storage, v_storage,
-                                            loop_set_prefix_id);
 }
 
 template <Config config>
@@ -441,4 +392,54 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
         d_ans[uid] += local_ans;
     }
 }
+
+// plugin for kernels
+template <Config config, int cur_pattern_vid>
+void prepare_v_storage(DeviceContext<config> &context,
+                       PrefixStorages<config> &prefix_storages,
+                       VertexStorages<config> &vertex_storages) {
+    const auto &v_storage = vertex_storages[cur_pattern_vid];
+
+    int loop_set_prefix_id =
+        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
+    const auto &p_storage = prefix_storages[loop_set_prefix_id];
+
+    prepare_v_storage_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, p_storage, v_storage,
+                                            loop_set_prefix_id);
+}
+
+template <Config config, int cur_pattern_vid>
+void extend_v_storage(const DeviceContext<config> context,
+                      PrefixStorages<config> p_storages,
+                      VertexStorages<config> v_storages, int start_uid,
+                      int end_uid) {
+    const auto &cur_v_storage = v_storages[cur_pattern_vid];
+    const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
+
+    // 下一个点的 loop_set_prefix_id
+    const int loop_set_prefix_id =
+        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
+    const auto &loop_set_storage = p_storages[loop_set_prefix_id];
+
+    extend_v_storage_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, loop_set_storage,
+                                            loop_set_prefix_id, cur_v_storage,
+                                            next_v_storage, start_uid, end_uid);
+}
+
+template <Config config, int cur_pattern_vid>
+void extend_p_storage(DeviceContext<config> &context,
+                      PrefixStorages<config> &prefix_storages,
+                      VertexStorages<config> &vertex_storages, int start_uid,
+                      int end_uid) {
+    const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
+    const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
+
+    extend_p_storage_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
+                                            cur_v_storage, next_v_storage,
+                                            start_uid, end_uid);
+}
+
 }  // namespace Engine
