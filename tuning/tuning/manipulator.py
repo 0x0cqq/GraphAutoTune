@@ -12,12 +12,11 @@ import xgboost as xgb
 from .const import *
 from .utils import config_random_walk, dict2list
 
-logger = logging.getLogger("tuner")
+logger = logging.getLogger("manipulator")
 
 
 class Manipulator:
     def __init__(self, num_warmup_sample: int = 100):
-        # self.params = self.read_params(PARAM_PATH)
         self.xs = []
         self.ys = []
         self.best_config = ({}, FLOAT_INF)
@@ -34,10 +33,6 @@ class Manipulator:
         }
         self.batch_size = 10
 
-        # global xgb
-        # if xgb is None:
-        #     xgb = __import__("xgboost")
-
         with open(RECORD_PATH, "r") as f:
             if os.path.getsize(RECORD_PATH) != 0:
                 records = json.load(f)
@@ -45,7 +40,7 @@ class Manipulator:
                     self.xs.append(res[0])
                     self.ys.append(res[1])
         assert len(self.xs) == len(self.ys)
-        print(f"Loaded {len(self.ys)} records from file.")
+        logger.info(f"Loaded {len(self.ys)} records from file.")
 
     def read_params(self, param_path: str) -> dict:
         # read parameters
@@ -96,7 +91,7 @@ class Manipulator:
         Add a test result to the manipulator.
         XGBoost does not support additional traning, so re-train a model each time.
         """
-        print("input:", inputs, results)
+        logger.info(f"input: {inputs}, results: {results}")
         if len(inputs) == 0:
             return
 
@@ -112,7 +107,7 @@ class Manipulator:
 
         if self.bst is None:
             tmp_matrix = np.asanyarray([dict2list(item) for item in self.xs])
-            print("tmp_matrix:", tmp_matrix)
+            logger.debug(f"tmp_matrix: {tmp_matrix}")
             perm = np.random.permutation(len(self.xs))
             dtrain = xgb.DMatrix(tmp_matrix[perm], np.asanyarray(self.ys)[perm])
             self.bst = xgb.train(self.xgb_params, dtrain, num_boost_round=1000)
@@ -120,7 +115,7 @@ class Manipulator:
             self.fit(self.xs, self.ys)
 
         possible_vals = []
-        print("\nAfter update:")
+        logger.info("After update:")
         for ua in PARAM_VAL["USE_ARRAY"]:
             for tpb in PARAM_VAL["THREADS_PER_BLOCK"]:
                 for nb in PARAM_VAL["NUM_BLOCKS"]:
@@ -131,7 +126,7 @@ class Manipulator:
                             tmp_val = self.bst.predict(tmp_matrix)[0]
                             if tmp_val not in possible_vals:
                                 possible_vals.append(tmp_val)
-        print("Possible values:", possible_vals)
+        logger.info(f"Possible values: {possible_vals}")
 
         self.trials = self.find_maximums(k, 40, 5)
 
@@ -147,11 +142,7 @@ class Manipulator:
         dtrain = xgb.DMatrix(np.asanyarray(dx)[index], np.array(dy)[index])
         self.bst = xgb.train(self.xgb_params, dtrain, num_boost_round=10000)
 
-        print(
-            "XGB train: %.2f\tobs: %d",
-            time.time() - tic,
-            len(data_x),
-        )
+        logger.info(f"XGB train: {time.time() - tic: .2f}\tobs: {len(data_x)}")
 
     def predict(self, data_x: List[dict]):
         if len(self.xs) < self.num_warmup_sample:
@@ -216,19 +207,11 @@ class Manipulator:
             temp *= 0.9
 
             if log_interval and _ % log_interval == 0:
-                print(
-                    f"\rFinding maximums... {(_ / n_iter):.2f}%, time elapsed: {(time.time() - tic):.2f}s, temp: {temp:.2f}, max: {heap_items[0].first}"
-                )
-                logger.log(
-                    logging.INFO,
+                logger.info(
                     f"\rFinding maximums... {(_ / n_iter):.2f}%, time elapsed: {(time.time() - tic):.2f}s, temp: {temp:.2f}, max: {heap_items[0].first}",
                 )
 
-        print(
-            f"\rFinding maximums... {(_ / n_iter):.2f}%, time elapsed: {(time.time() - tic):.2f}s, temp: {temp:.2f}, max: {heap_items[0].first}"
-        )
-        logger.log(
-            logging.INFO,
+        logger.info(
             f"\rFinding maximums... 100%, time elapsed: {(time.time() - tic):.2f}s, temp: {temp:.2f}, max: {heap_items[0].first}",
         )
 

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from tuning.argparser import parser
 from tuning.const import *
@@ -6,6 +7,8 @@ from tuning.manipulator import Manipulator
 from tuning.tuner import Tuner
 
 if __name__ == "__main__":
+
+    logger = logging.getLogger("main")
 
     args = parser.parse_args()
 
@@ -46,8 +49,9 @@ if __name__ == "__main__":
     else:
         best_config = tuner.tune(10, 3, debug_msg=args.debug_msg)
         # best_config = tuner.manipulator.find_maximums(5, 50, 1)
-        print("Best configuration:", best_config[0])
-        print(f"Estimated time cost: {best_config[1]:.2f}s")
+        logger.info(
+            f"Best configuration: {best_config[0]}, estimated time cost: {best_config[1]:.2f}s"
+        )
         with open(CONF_PATH, "w") as f:
             json.dump(best_config[0], f, indent=4)
-        print("Best configuration dumped in ./best_config.json")
+        logger.info("Best configuration dumped in ./best_config.json")
