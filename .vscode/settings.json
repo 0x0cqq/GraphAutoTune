@@ -1,6 +1,4 @@
 {
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true,
     "files.associations": {
         "iostream": "cpp",
         "type_traits": "cpp",
@@ -93,11 +91,26 @@
         "__functional_base": "cpp",
         "__string": "cpp"
     },
+    "[cpp]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": true,
+    },
     "C_Cpp.formatting": "clangFormat",
     "C_Cpp.default.cppStandard": "c++20",
     "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
     "C_Cpp.inlayHints.autoDeclarationTypes.showOnLeft": true,
     "C_Cpp.inlayHints.parameterNames.enabled": true,
     "C_Cpp.inlayHints.referenceOperator.enabled": true,
-    "C_Cpp.experimentalFeatures": "enabled"
+    "C_Cpp.experimentalFeatures": "enabled",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "always"
+        },
+    },
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
 }

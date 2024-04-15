@@ -3,6 +3,11 @@
         "ms-vscode.cpptools",
         "twxs.cmake",
         "nvidia.nsight-vscode-edition",
-        "ms-ceintl.vscode-language-pack-zh-hans"
+        "ms-ceintl.vscode-language-pack-zh-hans",
+        "njpwerner.autodocstring",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "ms-python.isort"
     ]
 }

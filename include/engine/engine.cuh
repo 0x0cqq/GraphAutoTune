@@ -86,8 +86,8 @@ class Executor {
 
 #ifndef NDEBUG
         std::cout << "Executor: Constructor Done. ";
-        print_device_memory();
 #endif
+        print_device_memory();
     }
 
     __host__ ~Executor() {

@@ -7,7 +7,7 @@ project(GraphAutoTune VERSION 1.0
 
 # Build type: Release by default
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug")
+    set(CMAKE_BUILD_TYPE "Release")
 endif()
 
 
