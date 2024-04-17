@@ -86,20 +86,23 @@ class ArrayVertexSet {
 
 namespace GPU {
 
+// 用二进制的方法重写这个二分，这样就没准可以循环展开了
 inline __device__ bool binary_search(const VIndex_t u, const VIndex_t* b,
                                      const VIndex_t nb) {
-    int mid, l = 0, r = int(nb) - 1;
-    while (l <= r) {
-        mid = (l + r) >> 1;
-        if (b[mid] < u) {
-            l = mid + 1;
-        } else if (b[mid] > u) {
-            r = mid - 1;
-        } else {
-            return true;
+    if (nb == 0) return false;
+    // 获取 nb 最高位的二进制位数
+    const VIndex_t p = 32 - __clz(nb - 1);
+    VIndex_t n = 0;
+    // 每次决定一个二进制位，从高到低
+    for (int i = p - 1; i >= 0; i--) {
+        // 这次决定的是从高往低的第 i 位
+        const VIndex_t index = n | (1 << i);
+        // 往右侧走
+        if (index < nb && b[index] <= u) {
+            n = index;
         }
     }
-    return false;
+    return b[n] == u;
 }
 
 inline __device__ bool linear_search(const VIndex_t u, const VIndex_t* b,

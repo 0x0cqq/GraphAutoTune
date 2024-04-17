@@ -84,20 +84,24 @@ __device__ inline int find_prefix_level_uid(
     return find_father(vertex_id, v_storage, uid);
 }
 
-__device__ inline VIndex_t find_prev_index(VIndex_t *sum, int l, int r,
+// 找到最后一个小于等于这个数的位置
+__device__ inline VIndex_t find_prev_index(VIndex_t *sum, int num_units,
                                            VIndex_t target_value) {
-    int mid = 0;
-    VIndex_t mid_value = 0;
-    while (l != r) {
-        mid = (l + r) >> 1;
-        mid_value = sum[mid];
-        if (mid_value <= target_value) {
-            l = mid + 1;
-        } else {  // mid_value > target_value
-            r = mid;
+    if (num_units == 0) return 0;
+    // 获取 nb 最高位的二进制位数
+    const VIndex_t p = 32 - __clz(num_units - 1);
+    VIndex_t n = 0;
+// 每次决定一个二进制位，从高到低
+#pragma unroll
+    for (int i = p - 1; i >= 0; i--) {
+        // 这次决定的是从高往低的第 i 位
+        const VIndex_t index = n | (1 << i);
+        // 往右侧走
+        if (index < num_units && sum[index - 1] <= target_value) {
+            n = index;
         }
     }
-    return l;
+    return n;
 }
 
 template <Config config, int cur_pattern_vid>
@@ -120,8 +124,8 @@ __global__ void extend_v_storage_kernel(const DeviceContext<config> context,
 
         // 从下一个点的 uid 反推到上一层的 Unit 和 Vertex，二分查找
         int cur_level_uid =
-            find_prev_index(cur_v_storage.unit_extend_sum, 0,
-                            cur_v_storage.num_units - 1, uid_in_total);
+            find_prev_index(cur_v_storage.unit_extend_sum,
+                            cur_v_storage.num_units, uid_in_total);
 
         for (int i = 0; i <= cur_pattern_vid; i++) {
             next_v_storage.prev_uid[next_extend_uid * MAX_VERTEXES + i] =
