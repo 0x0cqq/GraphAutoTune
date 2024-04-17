@@ -432,4 +432,19 @@ void get_iep_answer(DeviceContext<config> &context,
                                             last_v_storage, d_ans);
 }
 
+template <Config config>
+void set_vertex_set_space(const PrefixStorage<config> &p_storage) {
+    set_vertex_set_space_kernel<config>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(p_storage);
+}
+
+template <Config config>
+void first_extend(DeviceContext<config> &context,
+                  const PrefixStorage<config> &p_storage,
+                  const VertexStorage<config> &v_storage, VIndex_t start_vid,
+                  VIndex_t end_vid) {
+    first_extend_kernel<config><<<num_blocks, THREADS_PER_BLOCK>>>(
+        context, p_storage, v_storage, start_vid, end_vid);
+}
+
 }  // namespace Engine

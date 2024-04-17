@@ -66,8 +66,7 @@ class Executor {
         for (int i = 0; i < MAX_PREFIXS; i++) {
             prefix_storages[i].init();
             // 给 prefix storage 里面的 vertex set 分配内存空间
-            set_vertex_set_space_kernel<config>
-                <<<num_blocks, THREADS_PER_BLOCK>>>(prefix_storages[i]);
+            set_vertex_set_space<config>(prefix_storages[i]);
         }
         for (int i = 0; i < MAX_VERTEXES; i++) {
             vertex_storages[i].init();
@@ -137,9 +136,8 @@ __host__ unsigned long long Executor<config>::perform_search(
                   << ", end: " << end_vid << std::endl;
 #endif
         // 构建 prefix_storages[0] 和 vertex_storages[0]，也就是 prefix = [0]
-        first_extend_kernel<config><<<num_blocks, THREADS_PER_BLOCK>>>(
-            *device_context, prefix_storages[0], vertex_storages[0], start_vid,
-            end_vid);
+        first_extend<config>(*device_context, prefix_storages[0],
+                             vertex_storages[0], start_vid, end_vid);
 
         // vertex_storages[0].num_units
         vertex_storages[0].num_units = end_vid - start_vid;
