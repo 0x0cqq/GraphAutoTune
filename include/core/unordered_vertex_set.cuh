@@ -1,8 +1,10 @@
 #pragma once
 #include <array>
 
-#include "configs/gpu_consts.cuh"
+#include "configs/launch_config.hpp"
 #include "core/types.hpp"
+
+using namespace LaunchConfig;
 
 namespace Core {
 

@@ -95,6 +95,10 @@
         "editor.formatOnSave": true,
         "editor.formatOnPaste": true,
     },
+    "[cuda-cpp]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": true,
+    },
     "C_Cpp.formatting": "clangFormat",
     "C_Cpp.default.cppStandard": "c++20",
     "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,

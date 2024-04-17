@@ -46,7 +46,7 @@ namespace GPU {
 
 template <Config config>
 constexpr VIndex_t get_storage_space() {
-    return (config.graph_config.num_vertices - 1) / (sizeof(VIndex_t) * 8) + 1;
+    return (config.engine_config.max_set_size - 1) / (sizeof(VIndex_t) * 8) + 1;
 }
 
 template <Config config>

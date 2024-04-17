@@ -25,6 +25,8 @@ template <Config config>
 class Executor {
   private:
     using VertexSet = VertexSetTypeDispatcher<config>::type;
+    static constexpr int NUMS_UNIT = config.engine_config.nums_unit;
+    static constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
     DeviceType _device_type;
 
     // 搜索过程中每层所需要的临时存储。
@@ -166,27 +168,28 @@ __host__ void Executor<config>::search() {
         return;
     }
 
-    // 构建 v_storages[cur_pattern_vid] 的 unit_extend_size & sum
-    // 也就是向 cur_pattern_vid + 1 扩展的前置工作
-    VIndex_t extend_total_units = 0;
-    prepare<cur_pattern_vid>(extend_total_units);
+    // 对下一层递归进行搜素
+    // 这句 if constexpr 不能缺少，否则会导致编译器无限递归
+    // 不用特化的原因是，模板类中，成员函数无法单独特化
+    if constexpr (cur_pattern_vid + 1 < MAX_VERTEXES) {
+        // 构建 v_storages[cur_pattern_vid] 的 unit_extend_size & sum
+        // 也就是向 cur_pattern_vid + 1 扩展的前置工作
+        VIndex_t extend_total_units = 0;
+        prepare<cur_pattern_vid>(extend_total_units);
 
-    // 等待下一回合的结果被拷贝回来
-    gpuErrchk(cudaStreamSynchronize(0));
+        // 等待下一回合的结果被拷贝回来
+        gpuErrchk(cudaStreamSynchronize(0));
 
-    // std::cout << "Extend Total Units: " << extend_total_units << std::endl;
+        // std::cout << "Extend Total Units: " << extend_total_units <<
+        // std::endl;
 
-    // 直到本层全部被拓展完完成
-    for (int base = 0; base < extend_total_units; base += NUMS_UNIT) {
-        int num = min(extend_total_units - base, NUMS_UNIT);
+        // 直到本层全部被拓展完完成
+        for (int base = 0; base < extend_total_units; base += NUMS_UNIT) {
+            int num = min(extend_total_units - base, NUMS_UNIT);
 
-        // std::cout << "Base: " << base << ", Num: " << num << std::endl;
+            // std::cout << "Base: " << base << ", Num: " << num << std::endl;
 
-        extend<cur_pattern_vid>(base, num);
-        // 对下一层递归进行搜素
-        // 这句 if constexpr 不能缺少，否则会导致编译器无限递归
-        // 不用特化的原因是，模板类中，成员函数无法单独特化
-        if constexpr (cur_pattern_vid + 1 < MAX_VERTEXES) {
+            extend<cur_pattern_vid>(base, num);
             search<cur_pattern_vid + 1>();
         }
     }
@@ -291,8 +294,7 @@ __host__ void Executor<config>::final_step() {
     const auto &last_v_storage =
         vertex_storages[device_context->schedule_data.basic_vertexes - 1];
 
-    get_iep_answer_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(*device_context, prefix_storages,
+    get_iep_answer<config, cur_pattern_vid>(*device_context, prefix_storages,
                                             vertex_storages, d_ans);
 
 #ifndef NDEBUG

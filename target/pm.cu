@@ -3,7 +3,7 @@
 
 #include <algorithm>
 
-#include "configs/project_consts.hpp"
+#include "consts/project_consts.hpp"
 #include "core/schedule.hpp"
 #include "engine/engine.cuh"
 #include "infra/graph_backend.cuh"

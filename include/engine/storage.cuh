@@ -15,12 +15,11 @@
 
 namespace Engine {
 
-constexpr int MAX_SET_SIZE = 5000;  // 每个 Set 最多 x 个数
-constexpr int NUMS_UNIT = 50000;    // y 个 Vertex Set
-
 template <Config config>
 class VertexStorage {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
+    static constexpr int NUMS_UNIT = config.engine_config.nums_unit;
+    static constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
 
   public:
     DeviceType _device_type;
@@ -109,6 +108,8 @@ class VertexStorage {
 template <Config config>
 class PrefixStorage {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
+    static constexpr int NUMS_UNIT = config.engine_config.nums_unit;
+    static constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
 
   public:
     // 空间的位置 CPU or GPU

@@ -1,7 +1,7 @@
 #include <fstream>
 #include <string>
 
-#include "configs/project_consts.hpp"
+#include "consts/project_consts.hpp"
 #include "core/pattern.hpp"
 #include "infra/graph_backend.cuh"
 

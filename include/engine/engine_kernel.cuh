@@ -1,7 +1,10 @@
 #pragma once
 
+#include "configs/launch_config.hpp"
 #include "engine/context.cuh"
 #include "engine/storage.cuh"
+
+using namespace LaunchConfig;
 
 namespace Engine {
 
@@ -14,6 +17,8 @@ namespace Engine {
 // space 是单独开的，需要再分给 vertex set 里面的 pointer
 template <Config config>
 __global__ void set_vertex_set_space_kernel(PrefixStorage<config> p_storage) {
+    constexpr int NUMS_UNIT = config.engine_config.nums_unit;
+    constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
     const int wid = threadIdx.x / 32;
     const int global_wid = blockIdx.x * WARPS_PER_BLOCK + wid;
 
@@ -313,14 +318,12 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
 template <Config config, int cur_pattern_vid>
 __global__ void get_iep_answer_kernel(DeviceContext<config> context,
                                       PrefixStorages<config> p_storages,
-                                      VertexStorages<config> v_storages,
+                                      VertexStorage<config> last_v_storage,
                                       unsigned long long *d_ans) {
     // per-thread 去处理 Unit
     const int thread_id = threadIdx.x, block_id = blockIdx.x;
     const int global_tid = block_id * blockDim.x + thread_id;
     const int num_threads = gridDim.x * blockDim.x;
-
-    const auto &last_v_storage = v_storages[cur_pattern_vid];
 
     const int num_units = last_v_storage.num_units;
 
@@ -415,6 +418,18 @@ void extend_p_storage(DeviceContext<config> &context,
         <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
                                             cur_v_storage, next_v_storage,
                                             num_extend_units);
+}
+
+template <Config config, int cur_pattern_vid>
+void get_iep_answer(DeviceContext<config> &context,
+                    PrefixStorages<config> &prefix_storages,
+                    VertexStorages<config> &vertex_storages,
+                    unsigned long long *d_ans) {
+    const auto &last_v_storage = vertex_storages[cur_pattern_vid];
+
+    get_iep_answer_kernel<config, cur_pattern_vid>
+        <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
+                                            last_v_storage, d_ans);
 }
 
 }  // namespace Engine
