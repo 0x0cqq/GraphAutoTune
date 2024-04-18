@@ -5,7 +5,7 @@
 #include <nvfunctional>
 
 #include "configs/config.hpp"
-#include "configs/gpu_consts.cuh"
+#include "consts/general_consts.hpp"
 #include "core/types.hpp"
 #include "core/unordered_vertex_set.cuh"
 #include "core/vertex_set.cuh"

@@ -6,7 +6,7 @@
 #include <queue>
 #include <vector>
 
-#include "configs/gpu_consts.cuh"
+#include "consts/general_consts.hpp"
 #include "core/graph.cuh"
 #include "core/pattern.hpp"
 

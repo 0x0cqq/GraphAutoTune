@@ -3,7 +3,7 @@
 #include <cub/cub.cuh>
 
 #include "configs/config.hpp"
-#include "configs/gpu_consts.cuh"
+#include "consts/general_consts.hpp"
 #include "core/types.hpp"
 
 namespace GPU {

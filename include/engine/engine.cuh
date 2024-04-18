@@ -9,7 +9,7 @@
 #include <iostream>
 
 #include "configs/config.hpp"
-#include "configs/gpu_consts.cuh"
+#include "consts/general_consts.hpp"
 #include "core/graph.cuh"
 #include "core/schedule.hpp"
 #include "core/types.hpp"
