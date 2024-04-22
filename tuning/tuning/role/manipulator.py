@@ -7,7 +7,7 @@ import numpy as np
 
 from ..common.const import *
 from .modeling import Modeling
-from ..params import random_configuration
+from ..config.base import random_configuration
 from ..utils import config_random_walk, dict2list
 
 logger = logging.getLogger("manipulator")

@@ -1,13 +1,13 @@
 import random
 from typing import Any, Dict, List, Type, Union
 
-from .common.const import *
+from ..common.const import *
 
 # 参数空间：有一个名字 name ，有一堆可选的值
 # 参数选定：参数空间的一个点
 
 
-# Enum 类
+# Param 类，代表一个 C++ 的 Enum
 class ParamClass(object):
     values: List[Union[str, int]]
     default_value: Union[str, int]
@@ -45,6 +45,7 @@ class ParamClass(object):
         return "\n".join(ans)
 
 
+# Config 类，代表一个 C++ 的 Struct
 class ConfigClass(object):
     # key 是变量名，value 是组成 Config 的 ParamClass 或者 ConfigClass 的类本身
     params: Dict[str, Type[Union[ParamClass, "ConfigClass"]]]
@@ -97,61 +98,9 @@ class ConfigClass(object):
         return "\n".join(ans)
 
 
-class SetSearchType(ParamClass):
-    values = ["Binary", "Serial"]
-    default_value = "Binary"
+# 某个参数类的参数空间
+class ConfigSpace(object):
+    def __init__(self, config: Type[ConfigClass]):
+        self.config = config
 
-
-class SetIntersectionType(ParamClass):
-    values = ["Parallel", "Sequential"]
-    default_value = "Parallel"
-
-
-class VertexStoreType(ParamClass):
-    values = ["Array", "Bitmap"]
-    default_value = "Array"
-
-
-class VertexSetConfig(ConfigClass):
-    params = {
-        "set_search_type": SetSearchType,
-        "set_intersection_type": SetIntersectionType,
-        "vertex_store_type": VertexStoreType,
-    }
-
-
-class GraphBackendType(ParamClass):
-    values = ["InMemory"]
-    default_value = "InMemory"
-
-
-class InfraConfig(ConfigClass):
-    params = {
-        "graph_backend_type": GraphBackendType,
-    }
-
-
-class Config(ConfigClass):
-    params = {
-        "vertex_set_config": VertexSetConfig,
-        "infra_config": InfraConfig,
-    }
-
-
-# 用法
-
-config = Config("config")
-print(config)
-
-
-def random_configuration(self) -> dict:
-    """
-    return a random configuration to be tested
-    """
-    ret = {}
-    while True:
-        for key, item in PARAM_VAL.items():  # TODO: 需要改成使用这里的 ConfigClass
-            ret[key] = random.choice(item)
-        if ret not in self.xs:
-            break
-    return ret
+    # 其他的，包括随机参数，包括 dict 和 参数空间之间的转换
