@@ -1,6 +1,7 @@
+import json
 import random
 
-from .const import *
+from .common.const import *
 
 
 def dict2list(params: dict) -> list:
@@ -25,3 +26,12 @@ def config_random_walk(config: dict) -> dict:
         to_v = random.choice(PARAM_VAL[from_i])
     ret[from_i] = to_v
     return ret
+
+
+def read_params(param_path: str) -> dict:
+    # read parameters
+    with open(param_path) as f:
+        param_dict = json.load(f)
+        assert type(param_dict) == type(dict()), "Param JSON file error!"
+
+    return param_dict

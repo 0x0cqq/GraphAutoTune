@@ -14,14 +14,9 @@ parser.add_argument(
     help="Enable output of CMake and Make",
 )
 parser.add_argument(
-    "--run_best_config",
-    default=False,
-    action="store_true",
-    help="Run the best configuration only",
-)
-parser.add_argument(
-    "--run_default_config",
-    default=False,
-    action="store_true",
-    help="Run the default configuration only",
+    "--run_mode",
+    type=str,
+    default="tune",
+    choices=["tune", "run_default", "run_best"],
+    help="The Run Mode of the tuning program",
 )
