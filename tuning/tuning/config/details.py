@@ -45,19 +45,13 @@ class Config(ConfigClass):
     }
 
 
-# 用法
-
-config = Config("config")
-print(config)
-
-
 def random_configuration(self) -> dict:
     """
     return a random configuration to be tested
     """
     ret = {}
     while True:
-        for key, item in PARAM_VAL.items():  # TODO: 需要改成使用这里的 ConfigClass
+        for key, item in {}:  # TODO: 需要改成使用这里的 ConfigClass
             ret[key] = random.choice(item)
         if ret not in self.xs:
             break

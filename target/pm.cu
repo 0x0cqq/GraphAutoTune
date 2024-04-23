@@ -9,7 +9,8 @@
 #include "infra/graph_backend.cuh"
 #include "utils/cuda_utils.cuh"
 
-constexpr Config default_config{};
+// generated config
+#include "generated/default_config.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {

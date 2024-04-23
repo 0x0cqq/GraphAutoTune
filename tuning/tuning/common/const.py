@@ -2,23 +2,33 @@ import pathlib
 
 FLOAT_INF = 1e38
 
-COMMAND_PREFIX = "srun -p V100 --gres=gpu:v132p:1 --exclusive "
-# COMMAND_PREFIX = ""
-DATA_PATH = pathlib.Path(__file__).parent.absolute() / ".." / "dataset"
-BUILD_PATH = pathlib.Path(__file__).parent.absolute() / ".." / "build"
-PARAM_PATH = pathlib.Path(__file__).parent.absolute() / "param.json"
-CONF_PATH = pathlib.Path(__file__).parent.absolute() / "best_config.json"
-RESULT_PATH = pathlib.Path(__file__).parent.absolute() / "counting_time_cost.txt"
-RECORD_PATH = pathlib.Path(__file__).parent.absolute() / "record.json"
-PARAM_VAL = {
-    "USE_ARRAY": [1],
-    "THREADS_PER_BLOCK": [32, 64, 128, 256, 512, 1024],
-    "NUM_BLOCKS": [32, 64, 128, 256, 512, 1024],
-    "IEP_BY_SM": [0, 1],
-    "MAXREG": [0, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
-    "SORT": [0, 1],
-    "PARALLEL_INTERSECTION": [0, 1],
-    "BINARY_SEARCH": [0, 1],
-}
+# 项目根文件夹
+PROJECT_PATH = pathlib.Path("/home/cqq/GraphMining/GraphAutoTuner")
 
-JOB_NAME = "gpu_graph"
+# 数据集的位置
+DATA_PATH = PROJECT_PATH / "data"
+# 构建的目标位置
+BUILD_PATH = PROJECT_PATH / "build_tuning"
+
+# 生成的 Config 的位置
+GENERATED_CONFIG_PATH = PROJECT_PATH / "include" / "generated" / "default_config.hpp"
+GENERATED_CONFIG_TEMPLATE = """
+#pragma once
+#include "configs/config.hpp"
+
+constexpr Config {};
+
+"""  # 注意这里的 {} 是用来填充的，不是 C++ 的大括号
+
+# Tuning 相关的文件的存储位置
+TUNING_PATH = PROJECT_PATH / "tuning_results"
+
+PARAM_PATH = TUNING_PATH / "param.json"
+CONF_PATH = TUNING_PATH / "best_config.json"
+RESULT_PATH = TUNING_PATH / "counting_time_cost.txt"
+RECORD_PATH = TUNING_PATH / "record.json"
+
+# 跑二进制文件的时候需要的前缀
+RUN_COMMAND_PREFIX = "srun -p V100 --gres=gpu:v132p:1 --exclusive "
+
+BINARY_NAME = "gpu_graph"

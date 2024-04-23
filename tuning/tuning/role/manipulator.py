@@ -6,9 +6,9 @@ from typing import List
 import numpy as np
 
 from ..common.const import *
-from .modeling import Modeling
-from ..config.base import random_configuration
+from ..config.details import random_configuration
 from ..utils import config_random_walk, dict2list
+from .modeling import Modeling
 
 logger = logging.getLogger("manipulator")
 

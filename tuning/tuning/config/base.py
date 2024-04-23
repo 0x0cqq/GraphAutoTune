@@ -1,4 +1,5 @@
 import random
+from pathlib import Path
 from typing import Any, Dict, List, Type, Union
 
 from ..common.const import *
@@ -81,6 +82,10 @@ class ConfigClass(object):
 
     def get_value(self):
         return {key: getattr(self, key).get_value() for key in self.params.keys()}
+
+    def export(self, path: Path = GENERATED_CONFIG_PATH):
+        with open(path, "w") as f:
+            f.write(GENERATED_CONFIG_TEMPLATE.format(self.__str__()))
 
     def __str__(self) -> str:
         ans = f"{self.name} = " + "{"
