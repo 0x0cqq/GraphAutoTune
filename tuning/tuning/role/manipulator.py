@@ -6,17 +6,19 @@ from typing import List
 import numpy as np
 
 from ..common.const import *
-from ..config.details import random_configuration
-from ..utils import config_random_walk, dict2list
+from ..config.base import ConfigSpace
 from .modeling import Modeling
 
 logger = logging.getLogger("manipulator")
 
 
 class Manipulator:
-    def __init__(self, model: Modeling, num_warmup_sample: int = 100):
+    def __init__(
+        self, model: Modeling, config_space: ConfigSpace, num_warmup_sample: int = 100
+    ):
         self.best_config = ({}, FLOAT_INF)
         self.model = model
+        self.config_space = config_space
         self.num_warmup_sample = num_warmup_sample
         self.batch_size = 10
 
@@ -33,7 +35,7 @@ class Manipulator:
 
         possible_vals = []
         logger.info("After update:")
-        for tmp in CANSHUKONGJIAN:
+        for tmp in self.config_space.config_space():
             tmp_val = self.model.predict(tmp)
             if tmp_val not in possible_vals:
                 possible_vals.append(tmp_val)
@@ -63,7 +65,7 @@ class Manipulator:
         start = time.time()
         temp = 0.1
 
-        points = [random_configuration() for _ in range(num)]
+        points = [self.config_space.random_configuration() for _ in range(num)]
 
         scores = self.model.predict_list(points)
 
@@ -74,7 +76,7 @@ class Manipulator:
         for _ in range(n_iter):
             new_points = np.empty_like(points)
             for i in range(len(new_points)):
-                new_points[i] = config_random_walk(points[i])
+                new_points[i] = self.config_space.random_walk(points[i])
             new_scores = self.predict(new_points)
 
             ac_prob = np.exp((scores - new_scores) / temp)  # accept probability

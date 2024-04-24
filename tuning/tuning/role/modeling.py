@@ -8,7 +8,7 @@ import numpy as np
 import xgboost as xgb
 
 from ..common.const import *
-from ..utils import config_random_walk, dict2list
+from ..utils import dict2list
 
 logger = logging.getLogger("modeling")
 
@@ -35,15 +35,15 @@ class Modeling:
         self.__fit()
 
     # 从文件中加载 xs 和 ys
-    def __load(self):
-        if not os.path.exists(RECORD_PATH) or os.path.getsize(RECORD_PATH) == 0:
+    def __load(self, path=RECORD_PATH) -> None:
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
             logger.info("Empty record file, skipped.")
             return
 
         self.xs = []
         self.ys = []
 
-        with open(RECORD_PATH, "r") as f:
+        with open(path, "r") as f:
             records = json.load(f)
             for res in records:
                 self.xs.append(res[0])
@@ -52,8 +52,8 @@ class Modeling:
         logger.info(f"Loaded {len(self.ys)} records from file.")
 
     # 将 xs 和 ys 存储到文件中
-    def __dump(self):
-        with open(RECORD_PATH, "w") as f:
+    def __dump(self, path=RECORD_PATH) -> None:
+        with open(path, "w") as f:
             json.dump([[x, y] for x, y in zip(self.xs, self.ys)], f)
 
     # 使用储存的 xs 和 ys 训练 XGBoost 模型

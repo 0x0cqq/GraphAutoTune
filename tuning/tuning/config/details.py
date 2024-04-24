@@ -43,16 +43,3 @@ class Config(ConfigClass):
         "vertex_set_config": VertexSetConfig,
         "infra_config": InfraConfig,
     }
-
-
-def random_configuration(self) -> dict:
-    """
-    return a random configuration to be tested
-    """
-    ret = {}
-    while True:
-        for key, item in {}:  # TODO: 需要改成使用这里的 ConfigClass
-            ret[key] = random.choice(item)
-        if ret not in self.xs:
-            break
-    return ret

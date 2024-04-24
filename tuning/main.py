@@ -6,7 +6,6 @@ from tuning.common.const import *
 from tuning.role.manipulator import Manipulator
 from tuning.role.modeling import Modeling
 from tuning.role.tuner import Tuner
-from tuning.utils import read_params
 
 logger = logging.getLogger("main")
 

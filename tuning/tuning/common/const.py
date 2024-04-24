@@ -19,6 +19,7 @@ GENERATED_CONFIG_TEMPLATE = """
 constexpr Config {};
 
 """  # 注意这里的 {} 是用来填充的，不是 C++ 的大括号
+MAX_CONFIG_SPACE_SIZE = 1e6  # 最大的 Config Space 的大小
 
 # Tuning 相关的文件的存储位置
 TUNING_PATH = PROJECT_PATH / "tuning_results"
