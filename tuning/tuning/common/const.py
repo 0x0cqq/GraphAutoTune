@@ -32,4 +32,4 @@ RECORD_PATH = TUNING_PATH / "record.json"
 # 跑二进制文件的时候需要的前缀
 RUN_COMMAND_PREFIX = "srun -p V100 --gres=gpu:v132p:1 --exclusive "
 
-BINARY_NAME = "gpu_graph"
+BINARY_NAME = "pm"

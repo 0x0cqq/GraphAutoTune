@@ -3,30 +3,32 @@ import os
 from typing import List
 
 from ..common.const import *
+from ..config.details import Config
 
-logger = logging.getLogger("tuner")
+logger = logging.getLogger("driver")
 
 
 class Driver:
     @staticmethod
-    def compile(param_dict: dict):
-        """按照参数编译程序
-
-        Args:
-            param_dict (dict): 参数的词典
-
-        """
+    def compile(config: Config):
 
         definitions = ""
 
-        for key, val in param_dict.items():
-            definitions += f"-D{key}={val} "
+        build_path = BUILD_PATH / str(hash(config))
 
-        logger.debug(f"BUILD_PATH = {BUILD_PATH}")
-        os.chdir(BUILD_PATH)
+        logger.debug(f"build_path = {build_path}")
 
-        cmake_command = "cmake " + definitions + ".."
+        if not os.path.exists(build_path):
+            os.makedirs(build_path)
+        else:
+            logger.debug("Build path already exists, skipping compilation")
+            return
+
+        os.chdir(build_path)
+
+        cmake_command = "cmake " + definitions + " " + PROJECT_PATH
         logger.debug(f"Generating makefile with CMake: {cmake_command}")
+        # without stdout
         ret_code = os.system(cmake_command)
 
         assert ret_code == 0, f"CMake exited with non-zero code {ret_code}"
@@ -37,18 +39,26 @@ class Driver:
         assert ret_code == 0, f"Make exited with non-zero code {ret_code}"
 
     @staticmethod
-    def run(job: str, options: List[str]) -> float:
+    def run(job: str, options: List[str], config: Config) -> float:
         """运行程序
 
         Returns:
             float: 时间
         """
 
-        os.chdir(BUILD_PATH / "bin")
+        build_path = BUILD_PATH / str(hash(config))
 
-        logger.debug(f"Running Job: {job} options: {options}")
+        if not os.path.exists(build_path):
+            logger.warning("Build path does not exist, compiling...")
+            Driver.compile(config)
+        else:
+            logger.debug("Build path already exists, skipping compilation")
 
-        run_command = f"{COMMAND_PREFIX} ./{job} {' '.join(options)}"
+        os.chdir(build_path)
+
+        logger.debug(f"Running Job: <{job}> with options: <{options}>")
+
+        run_command = f"{RUN_COMMAND_PREFIX} ./{job} {' '.join(options)}"
         logger.debug(f"Running Command: {run_command}")
         ret_code = os.system(run_command)
 
@@ -57,7 +67,7 @@ class Driver:
             return FLOAT_INF
 
         with open(RESULT_PATH, "r") as f:
-            time_cost = float(f.readline())
+            time_cost = float(f.read().strip())
 
         logger.info(f"Time cost: {time_cost:.2f} s\n")
 

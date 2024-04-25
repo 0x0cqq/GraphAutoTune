@@ -9,8 +9,8 @@
 // 总的 Config，包含了所有的配置
 struct Config {
     VertexSetConfig vertex_set_config;
-    EngineConfig engine_config;
     InfraConfig infra_config;
+    EngineConfig engine_config;
 };
 
 // 类型的默认占位符

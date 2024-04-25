@@ -1,20 +1,22 @@
 import random
 
 from ..common.const import *
-from .base import ConfigClass, ParamClass
+from .base import ConfigClass, EnumParam, IntegerParam, ParamClass
+
+# 这里是和 C++ 的实现一一对应的
 
 
-class SetSearchType(ParamClass):
+class SetSearchType(EnumParam):
     values = ["Binary", "Serial"]
     default_value = "Binary"
 
 
-class SetIntersectionType(ParamClass):
+class SetIntersectionType(EnumParam):
     values = ["Parallel", "Sequential"]
     default_value = "Parallel"
 
 
-class VertexStoreType(ParamClass):
+class VertexStoreType(EnumParam):
     values = ["Array", "Bitmap"]
     default_value = "Array"
 
@@ -27,7 +29,7 @@ class VertexSetConfig(ConfigClass):
     }
 
 
-class GraphBackendType(ParamClass):
+class GraphBackendType(EnumParam):
     values = ["InMemory"]
     default_value = "InMemory"
 
@@ -38,8 +40,26 @@ class InfraConfig(ConfigClass):
     }
 
 
+class MaxSetSize(IntegerParam):
+    values = [5000]
+    default_value = 5000
+
+
+class NumUnits(IntegerParam):
+    values = [10000, 50000]
+    default_value = 10000
+
+
+class EngineConfig(ConfigClass):
+    params = {
+        "max_set_size": MaxSetSize,
+        "nums_unit": NumUnits,
+    }
+
+
 class Config(ConfigClass):
     params = {
         "vertex_set_config": VertexSetConfig,
         "infra_config": InfraConfig,
+        "engine_config": EngineConfig,
     }

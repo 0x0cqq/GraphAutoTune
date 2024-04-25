@@ -1,34 +1,45 @@
 import heapq
 import logging
 import time
-from typing import List
+from typing import List, TypeVar
 
 import numpy as np
 
 from ..common.const import *
-from ..config.base import ConfigSpace
+from ..config.base import ConfigClass, ConfigSpace
 from .modeling import Modeling
 
 logger = logging.getLogger("manipulator")
 
+# Manipulator 中，我们使用 ConfigSpace 提供的能力操作参数空间，成为
+
 
 class Manipulator:
     def __init__(
-        self, model: Modeling, config_space: ConfigSpace, num_warmup_sample: int = 100
+        self, model: Modeling, config_class: ConfigClass, num_warmup_sample: int = 100
     ):
         self.best_config = ({}, FLOAT_INF)
         self.model = model
-        self.config_space = config_space
+        self.config_space = ConfigSpace(config_class)
         self.num_warmup_sample = num_warmup_sample
         self.batch_size = 10
 
-    def update(self, inputs: List[dict], results: List[float]) -> None:
+    def update(self, inputs: List[ConfigClass], results: List[float]) -> None:
         """
         Add a test result to the manipulator.
         XGBoost does not support additional training, so re-train a model each time.
         """
 
+        assert len(inputs) == len(
+            results
+        ), f"inputs and results should have the same length, got {len(inputs)} and {len(results)}"
+        # inputs 和 ConfigSpace 的类型应该是一致的
+        assert all(
+            isinstance(x, self.config_space.config_class) for x in inputs
+        ), f"inputs: {inputs} are not of type {self.config_space.config_class.__name__}"
+
         if len(inputs) == 0:
+            logger.debug("No data to update.")
             return
 
         self.model.update_list(inputs, results)

@@ -1,19 +1,23 @@
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Type, Union
+from typing import Dict, List, Type, TypeVar, Union
 
 from ..common.const import *
 
 # 参数空间：有一个名字 name ，有一堆可选的值
 # 参数选定：参数空间的一个点
 
+U = Union[str, int, float]
 
-# Param 类，代表一个 C++ 的 Enum
+
+# 通用的 Param 类，我们目前只支持离散的变量
 class ParamClass(object):
-    values: List[Union[str, int]]
-    default_value: Union[str, int]
+    T = TypeVar("T", str, int, float)
 
-    def __init__(self, name, value):
+    values: List[T]
+    default_value: T
+
+    def __init__(self, name: str, value: T):
         self.name = name
         self.value = value
         assert (
@@ -21,21 +25,30 @@ class ParamClass(object):
         ), f"Invalid value {value} for {self.__class__.__name__}, valid values are {self.values}"
 
     @classmethod
-    def get_values(cls) -> List[Union[str, int]]:
+    def get_values(cls) -> List[T]:
         return cls.values
 
     @classmethod
-    def get_default_value(cls) -> Union[str, int]:
+    def get_default_value(cls) -> T:
         return cls.default_value
 
     def get_name(self) -> str:
         return self.name
 
-    def get_value(self) -> Union[str, int]:
+    def get_value(self) -> T:
         return self.value
 
     def __str__(self) -> str:
         return f"{self.name} = {self.value}"
+
+    @classmethod
+    def get_decl_str(cls) -> str:
+        raise NotImplementedError
+
+
+# 类型是字符串
+class EnumParam(ParamClass):
+    T = str
 
     @classmethod
     def get_decl_str(cls) -> str:
@@ -44,6 +57,24 @@ class ParamClass(object):
         ans += [f"    {value}," for value in cls.values]
         ans.append("};")
         return "\n".join(ans)
+
+
+# 类型是整数
+class IntegerParam(ParamClass):
+    T = int
+
+    @classmethod
+    def get_decl_str(cls) -> str:
+        return f"using {cls.__name__} = int;"
+
+
+# 类型是浮点数
+class FloatParam(ParamClass):
+    T = float
+
+    @classmethod
+    def get_decl_str(cls) -> str:
+        return f"using {cls.__name__} = float;"
 
 
 # Config 类，代表一个 C++ 的 Struct
@@ -94,13 +125,13 @@ class ConfigClass(object):
         return cls.params
 
     @classmethod
-    def get_default_value(cls) -> Dict[str, Union[str, int]]:
+    def get_default_value(cls) -> Dict[str, U]:
         return {key: value.get_default_value() for key, value in cls.params.items()}
 
     def get_name(self) -> str:
         return self.name
 
-    def get_value(self) -> Dict[str, Union[str, int]]:
+    def get_value(self) -> Dict[str, U]:
         return {key: getattr(self, key).get_value() for key in self.params.keys()}
 
     def export(self, path: Path = GENERATED_CONFIG_PATH) -> None:
@@ -113,6 +144,10 @@ class ConfigClass(object):
         ans += "}"
         return ans
 
+    # hash 函数，用于判断两个 Config 是否相等
+    def __hash__(self) -> int:
+        return hash(self.__str__())
+
     @classmethod
     def get_decl_str(cls) -> str:
         ans = []
@@ -122,9 +157,22 @@ class ConfigClass(object):
         ans.append("};")
         return "\n".join(ans)
 
+    @classmethod
+    def get_all_decl_str(cls) -> str:
+        ans = []
+        for key, value in cls.params.items():
+            if issubclass(value, ConfigClass):
+                ans.append(value.get_all_decl_str())
+            elif issubclass(value, ParamClass):
+                ans.append(value.get_decl_str())
+            else:
+                assert False, f"Invalid type {value}, must be ConfigClass or ParamClass"
+        ans.append(cls.get_decl_str())
+        return "\n".join(ans)
+
 
 # 某个参数类的参数空间
-# 其实也可以直接和 ConfigClass 绑定，但这样写更优雅一些
+# 在这里我们只会处理 Dict，而不是 ConfigClass
 class ConfigSpace(object):
     def __init__(self, config: Type[ConfigClass]):
         self.config_class = config
