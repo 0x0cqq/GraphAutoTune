@@ -18,7 +18,7 @@ class Manipulator:
     def __init__(
         self, model: Modeling, config_class: ConfigClass, num_warmup_sample: int = 100
     ):
-        self.best_config = ({}, FLOAT_INF)
+        self.best_config = (None, FLOAT_INF)
         self.model = model
         self.config_space = ConfigSpace(config_class)
         self.num_warmup_sample = num_warmup_sample
@@ -44,7 +44,7 @@ class Manipulator:
 
         self.model.update_list(inputs, results)
 
-        possible_vals = []
+        possible_vals: List[float] = []
         logger.info("After update:")
         for tmp in self.config_space.config_space():
             tmp_val = self.model.predict(tmp)
@@ -85,10 +85,8 @@ class Manipulator:
         in_heap = [x.second for x in heap_items]
 
         for _ in range(n_iter):
-            new_points = np.empty_like(points)
-            for i in range(len(new_points)):
-                new_points[i] = self.config_space.random_walk(points[i])
-            new_scores = self.predict(new_points)
+            new_points = [self.config_space.random_walk(point) for point in points]
+            new_scores = self.model.predict_list(new_points)
 
             ac_prob = np.exp((scores - new_scores) / temp)  # accept probability
             ac_index = np.random.random(len(ac_prob)) < ac_prob  # accepted index

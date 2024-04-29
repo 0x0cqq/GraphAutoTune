@@ -8,7 +8,7 @@ import numpy as np
 import xgboost as xgb
 
 from ..common.const import *
-from ..utils import dict2list
+from ..config.base import ConfigClass
 
 logger = logging.getLogger("modeling")
 
@@ -27,8 +27,8 @@ class Modeling:
     }
 
     def __init__(self) -> None:
-        self.xs = []
-        self.ys = []
+        self.xs: List[ConfigClass] = []
+        self.ys: List[float] = []
         self.bst: xgb.Booster | None = None
 
         self.__load()
@@ -67,7 +67,7 @@ class Modeling:
             start = time.time()
 
             index = np.random.permutation(object_count)
-            dx = [dict2list(item) for item in self.xs]
+            dx = [item.get_list() for item in self.xs]
             dy = self.ys
 
             dtrain = xgb.DMatrix(np.asanyarray(dx)[index], np.array(dy)[index])
@@ -80,15 +80,15 @@ class Modeling:
             )
 
     # 用性能模型预测
-    def predict_list(self, data_x: List[dict]):
-        dtest = xgb.DMatrix(np.asanyarray([dict2list(item) for item in data_x]))
+    def predict_list(self, data_x: List[ConfigClass]) -> List[float]:
+        dtest = xgb.DMatrix(np.asanyarray([item.get_list() for item in data_x]))
         return self.bst.predict(dtest)
 
-    def predict(self, data_x: dict):
-        return self.predict_list([data_x])[0]
+    def predict(self, data_x: ConfigClass) -> float:
+        return self.predict_list([data_x.get_list()])[0]
 
     # 添加一组新的数据
-    def update(self, new_x: dict, new_y: float):
+    def update(self, new_x: ConfigClass, new_y: float):
         self.xs.append(new_x)
         self.ys.append(new_y)
 
@@ -96,7 +96,7 @@ class Modeling:
 
         self.__fit(self.xs, self.ys)
 
-    def update_list(self, new_xs: List[dict], new_ys: List[float]):
+    def update_list(self, new_xs: List[ConfigClass], new_ys: List[float]):
         self.xs.extend(new_xs)
         self.ys.extend(new_ys)
 
