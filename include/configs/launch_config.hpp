@@ -1,5 +1,13 @@
 #pragma once
 
+// struct LaunchConfig {
+//     int num_blocks;
+//     int warps_per_block;
+//     int threads_per_block;
+// };
+
+// TODO，Launch Task 如何确定参数？
+
 namespace LaunchConfig {
 
 constexpr int THREADS_PER_BLOCK = 128;

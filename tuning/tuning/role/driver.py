@@ -14,7 +14,7 @@ class Driver:
 
         definitions = ""
 
-        build_path = BUILD_PATH / str(hash(config))
+        build_path = BUILD_PATH / config.fingerprint()
 
         logger.debug(f"build_path = {build_path}")
 
@@ -26,7 +26,10 @@ class Driver:
 
         os.chdir(build_path)
 
-        cmake_command = "cmake " + definitions + " " + PROJECT_PATH
+        config.export()
+        logger.info(f"Compile with Config: {config}")
+
+        cmake_command = "cmake " + definitions + " " + str(PROJECT_PATH)
         logger.debug(f"Generating makefile with CMake: {cmake_command}")
         # without stdout
         ret_code = os.system(cmake_command)
@@ -38,6 +41,8 @@ class Driver:
         ret_code = os.system(make_command)
         assert ret_code == 0, f"Make exited with non-zero code {ret_code}"
 
+        logger.info("Compilation finished")
+
     @staticmethod
     def run(job: str, options: List[str], config: Config) -> float:
         """运行程序
@@ -46,7 +51,7 @@ class Driver:
             float: 时间
         """
 
-        build_path = BUILD_PATH / str(hash(config))
+        build_path = BUILD_PATH / config.fingerprint()
 
         if not os.path.exists(build_path):
             logger.warning("Build path does not exist, compiling...")
@@ -56,7 +61,7 @@ class Driver:
 
         os.chdir(build_path)
 
-        logger.debug(f"Running Job: <{job}> with options: <{options}>")
+        logger.info(f"Running Job: <{job}> with options: <{options}>")
 
         run_command = f"{RUN_COMMAND_PREFIX} ./{job} {' '.join(options)}"
         logger.debug(f"Running Command: {run_command}")

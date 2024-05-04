@@ -35,9 +35,7 @@ class Tuner:
             valid_trials = []
             results = []
             for trial in trials:
-                Driver.compile(trial)
-
-                time_cost = Driver.run(self.job, self.options)
+                time_cost = Driver.run(self.job, self.options, trial)
 
                 if time_cost != FLOAT_INF:  # ERROR CONFIG
                     valid_trials.append(trial)

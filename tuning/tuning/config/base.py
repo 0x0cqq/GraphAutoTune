@@ -1,3 +1,4 @@
+import hashlib
 import random
 from pathlib import Path
 from typing import Dict, List, Type, TypeVar, Union
@@ -16,7 +17,11 @@ def dict2list(params: Dict) -> List[float]:
     ret = []
     for key, val in params.items():
         if isinstance(val, str):
-            ret.append(hash(val))
+            digest = hashlib.md5(val.encode()).digest()
+            # 成为一个 int
+            # 截取前 4 个字节
+            int_digest = int.from_bytes(digest[:4], byteorder="big")
+            ret.append(int_digest)
         else:
             ret.append(val)
 
@@ -226,8 +231,9 @@ class ConfigClass(object):
         return ans
 
     # hash 函数，用于判断两个 Config 是否相等
-    def __hash__(self) -> int:
-        return hash(self.__str__())
+    def fingerprint(self) -> str:
+        print(f"Hashing {self.__str__()}")
+        return hashlib.md5(self.__str__().encode()).hexdigest()
 
 
 # 某个参数类的参数空间

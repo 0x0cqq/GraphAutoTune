@@ -29,12 +29,6 @@ class VertexSetConfig(ConfigClass):
     }
 
 
-class UserKernelConfig(ConfigClass):
-    params = {
-        "vertex_set_config": VertexSetConfig,
-    }
-
-
 class GraphBackendType(EnumParam):
     values = ["InMemory"]
     default_value = "InMemory"
@@ -65,7 +59,7 @@ class EngineConfig(ConfigClass):
 
 class Config(ConfigClass):
     params = {
-        "user_kernel_config": UserKernelConfig,
+        "vertex_set_config": VertexSetConfig,
         "infra_config": InfraConfig,
         "engine_config": EngineConfig,
     }

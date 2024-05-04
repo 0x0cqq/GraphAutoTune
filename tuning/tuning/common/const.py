@@ -16,7 +16,7 @@ GENERATED_CONFIG_TEMPLATE = """
 #pragma once
 #include "configs/config.hpp"
 
-constexpr Config {};
+constexpr Config default_config{};
 
 """  # 注意这里的 {} 是用来填充的，不是 C++ 的大括号
 MAX_CONFIG_SPACE_SIZE = 1e6  # 最大的 Config Space 的大小
