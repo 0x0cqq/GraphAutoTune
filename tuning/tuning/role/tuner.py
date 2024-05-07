@@ -1,5 +1,5 @@
 import logging
-import os
+from typing import List
 
 from ..common.const import *
 from .driver import Driver
@@ -9,7 +9,7 @@ logger = logging.getLogger("tuner")
 
 
 class Tuner:
-    def __init__(self, job: str, options: str, manipulator: Manipulator) -> None:
+    def __init__(self, job: str, options: List[str], manipulator: Manipulator) -> None:
         """
         :param: job cuda program
         :param: options data path and pattern size

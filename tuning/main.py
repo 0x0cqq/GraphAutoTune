@@ -3,11 +3,15 @@ import logging
 
 from tuning.common.argparser import parser
 from tuning.common.const import *
+from tuning.config.details import Config
 from tuning.role.manipulator import Manipulator
 from tuning.role.modeling import Modeling
 from tuning.role.tuner import Tuner
 
 logger = logging.getLogger("main")
+
+
+JOB_NAME = "./bin/pm"
 
 
 if __name__ == "__main__":
@@ -16,11 +20,10 @@ if __name__ == "__main__":
 
     # create context
     model = Modeling()
-    manip = Manipulator(model)
+    manip = Manipulator(model, Config)
     tuner = Tuner(
         JOB_NAME,
-        f"{DATA_PATH}/{args.data} "
-        + " ".join([args.graph_size, args.pattern_string, args.use_iep]),
+        [args.data, args.pattern],
         manip,
     )
 

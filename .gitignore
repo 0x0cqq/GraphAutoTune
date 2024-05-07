@@ -1,5 +1,6 @@
 # CMake build directory
 build/
 build_tuning/
+tuning_results/
 
 **/__pycache__/
