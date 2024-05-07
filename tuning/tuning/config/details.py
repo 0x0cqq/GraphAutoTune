@@ -7,17 +7,17 @@ from .base import ConfigClass, EnumParam, IntegerParam, ParamClass
 
 
 class SetSearchType(EnumParam):
-    values = ["Binary", "Serial"]
+    values = ["Binary", "Linear"]
     default_value = "Binary"
 
 
 class SetIntersectionType(EnumParam):
-    values = ["Parallel", "Sequential"]
+    values = ["Parallel", "Serial"]
     default_value = "Parallel"
 
 
 class VertexStoreType(EnumParam):
-    values = ["Array", "Bitmap"]
+    values = ["Array"]
     default_value = "Array"
 
 
@@ -41,12 +41,12 @@ class InfraConfig(ConfigClass):
 
 
 class MaxSetSize(IntegerParam):
-    values = [5000]
+    values = [5000, 10000]
     default_value = 5000
 
 
 class NumUnits(IntegerParam):
-    values = [10000, 50000]
+    values = [5000, 10000, 20000, 50000]
     default_value = 10000
 
 

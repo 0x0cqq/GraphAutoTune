@@ -24,6 +24,7 @@ def dict2list(params: Dict) -> List[float]:
             ret.append(int_digest)
         else:
             ret.append(val)
+    return ret
 
 
 # 通用的 Param 类，我们目前只支持离散的变量
@@ -198,19 +199,22 @@ class ConfigClass(object):
                     ret[key + "." + sub_key] = sub_value
         return ret
 
-    def get_list(self) -> List[float]:
+    def get_flat_dict(self) -> Dict[str, float]:
         ret = {}
         for key, value in self.params.items():
             if issubclass(value, ParamClass):
                 ret[key] = getattr(self, key).get_value()
             else:
-                temp = getattr(self, key)._get_flat_dict()
+                temp = getattr(self, key).get_flat_dict()
                 for sub_key, sub_value in temp.items():
                     assert (
                         key + "." + sub_key not in ret
                     ), f"Duplicate key {key + '.' + sub_key} in {self.name}'s flat dict"
                     ret[key + "." + sub_key] = sub_value
-        return dict2list(ret)
+        return ret
+
+    def get_list(self) -> List[float]:
+        return dict2list(self.get_flat_dict())
 
     def export(self, path: Path = GENERATED_CONFIG_PATH) -> None:
         with open(path, "w") as f:
@@ -230,9 +234,12 @@ class ConfigClass(object):
         ans += "}"
         return ans
 
+    @classmethod
+    def parse(cls, flat_dict: Dict[str, float]):
+        pass
+
     # hash 函数，用于判断两个 Config 是否相等
     def fingerprint(self) -> str:
-        print(f"Hashing {self.__str__()}")
         return hashlib.md5(self.__str__().encode()).hexdigest()
 
 
@@ -247,7 +254,12 @@ class ConfigSpace(object):
             for key, value in config.get_flat_params().items()
             if len(value.get_values()) > 1
         }
-        print(f"Flat params: {self.flat_params.keys()}")
+
+    def config_space_size(self) -> int:
+        size = 1
+        for key, value in self.flat_params.items():
+            size *= len(value.get_values())
+        return size
 
     def config_space(self) -> List[ConfigClass]:
         return self.config_class.get_all_values()
@@ -255,6 +267,23 @@ class ConfigSpace(object):
     # 从参数空间中随机取一个点出来
     def random_configuration(self) -> ConfigClass:
         return self.config_class.random_choice()
+
+    def random_configurations(self, k: int) -> List[ConfigClass]:
+        if k > self.config_space_size():
+            raise ValueError(
+                f"Cannot sample {k} configs from a space of size {self.config_space_size()}"
+            )
+
+        configs: List[ConfigClass] = []
+
+        for _ in range(k):
+            config = self.random_configuration()
+            while config.fingerprint() in [x.fingerprint() for x in configs]:
+                config = self.random_configuration()
+
+            configs.append(config)
+
+        return configs
 
     # 从输入的 config 开始，随机走一步
     def random_walk(self, config: ConfigClass) -> ConfigClass:
@@ -278,7 +307,7 @@ class ConfigSpace(object):
 
             # 如果选的值和原来的值不一样，就赋值
             if getattr(cur, keys[-1]) != value:
-                print(f"Change {key} from {getattr(cur, keys[-1])} to {value}")
+                # print(f"Change {key} from {getattr(cur, keys[-1])} to {value}")
                 setattr(cur, keys[-1], value)
                 break
             else:

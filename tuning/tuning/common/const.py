@@ -26,8 +26,29 @@ TUNING_PATH = PROJECT_PATH / "tuning_results"
 
 PARAM_PATH = TUNING_PATH / "param.json"
 CONF_PATH = TUNING_PATH / "best_config.json"
-RESULT_PATH = TUNING_PATH / "counting_time_cost.txt"
 RECORD_PATH = TUNING_PATH / "record.json"
+
+TIME_FILE_NAME = "time.txt"
+COUNT_FILE_NAME = "count.txt"
+RESULT_FILE_NAME = "result.txt"
+CONFIG_FILE_NAME = "config.json"
+
+
+def get_config_path(config_hash: str) -> pathlib.Path:
+    return BUILD_PATH / config_hash / CONFIG_FILE_NAME
+
+
+def get_result_path(config_hash: str) -> pathlib.Path:
+    return TUNING_PATH / config_hash / RESULT_FILE_NAME
+
+
+def get_time_path(config_hash: str) -> pathlib.Path:
+    return TUNING_PATH / config_hash / TIME_FILE_NAME
+
+
+def get_counting_path(config_hash: str) -> pathlib.Path:
+    return TUNING_PATH / config_hash / COUNT_FILE_NAME
+
 
 # 跑二进制文件的时候需要的前缀
 RUN_COMMAND_PREFIX = "srun -p V100 --gres=gpu:v132p:1 --exclusive "

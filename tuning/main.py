@@ -10,6 +10,7 @@ from tuning.role.tuner import Tuner
 
 logger = logging.getLogger("main")
 
+logging.basicConfig(level=logging.INFO)
 
 JOB_NAME = "./bin/pm"
 
@@ -39,6 +40,7 @@ if __name__ == "__main__":
         logger.info("Best configuration dumped in ./best_config.json")
     elif mode == "run_default":
         # run default configuration
+        
         pass
     elif mode == "run_best":
         # run best configuration

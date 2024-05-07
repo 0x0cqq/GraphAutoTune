@@ -7,12 +7,12 @@ enum VertexStoreType {
 
 enum SetIntersectionType {
     Parallel,
-    Sequential,
+    Serial,
 };
 
 enum SetSearchType {
     Binary,
-    Serial,
+    Linear,
 };
 
 struct VertexSetConfig {

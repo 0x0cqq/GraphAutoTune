@@ -175,17 +175,12 @@ template <Config config>
 __device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
                                            const VIndex_t* b, VIndex_t na,
                                            VIndex_t nb) {
-    int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
-    int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
     int out_size = 0;
 
     for (int num_done = 0; num_done < na; num_done++) {
         bool found = false;
-        VIndex_t u = 0;
-        if (num_done + lid < na) {
-            u = a[num_done + lid];
-            found = search_dispatcher<config>(u, b, nb);
-        }
+        VIndex_t u = a[num_done];
+        found = search_dispatcher<config>(u, b, nb);
         if (found) out[out_size++] = u;
     }
     return out_size;
@@ -214,8 +209,10 @@ __device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
     VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
         this->_space, a.data(), b.data(), a.size(), b.size());
 
-    this->_data = this->_space;
-    this->_size = after_intersect_size;
+    if (lane_id == 0) {
+        this->_data = this->_space;
+        this->_size = after_intersect_size;
+    }
 }
 
 template <Config config, int depth, int SIZE>
@@ -229,14 +226,9 @@ __device__ VIndex_t do_intersection_serial_size(
     VIndex_t u = 0;
     bool found = false;
     for (int num_done = 0; num_done < na; num_done++) {
-        if (num_done + lid < na) {
-            u = a[num_done + lid];
-            found = search_dispatcher<config>(u, b, nb) &
-                    !set.has_data_single_thread<depth>(u);
-        }
-        if (lid == 0) {
-            out_size++;
-        }
+        u = a[num_done];
+        found = search_dispatcher<config>(u, b, nb) & !set.has_data<depth>(u);
+        if (found) out_size++;
     }
     return out_size;
 }

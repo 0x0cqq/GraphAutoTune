@@ -54,7 +54,7 @@ class Modeling:
     # 将 xs 和 ys 存储到文件中
     def __dump(self, path=RECORD_PATH) -> None:
         with open(path, "w") as f:
-            json.dump([[x, y] for x, y in zip(self.xs, self.ys)], f)
+            json.dump([[x.get_flat_dict(), y] for x, y in zip(self.xs, self.ys)], f)
 
     # 使用储存的 xs 和 ys 训练 XGBoost 模型
     def __fit(self):
@@ -81,7 +81,9 @@ class Modeling:
 
     # 用性能模型预测
     def predict_list(self, data_x: List[ConfigClass]) -> List[float]:
-        dtest = xgb.DMatrix(np.asanyarray([item.get_list() for item in data_x]))
+        matrix_x = [item.get_list() for item in data_x]
+        print(matrix_x)
+        dtest = xgb.DMatrix(np.asanyarray(matrix_x))
         return self.bst.predict(dtest)
 
     def predict(self, data_x: ConfigClass) -> float:

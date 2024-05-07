@@ -15,13 +15,10 @@ logger = logging.getLogger("manipulator")
 
 
 class Manipulator:
-    def __init__(
-        self, model: Modeling, config_class: ConfigClass, num_warmup_sample: int = 100
-    ):
+    def __init__(self, model: Modeling, config_class: ConfigClass):
         self.best_config = (None, FLOAT_INF)
         self.model = model
         self.config_space = ConfigSpace(config_class)
-        self.num_warmup_sample = num_warmup_sample
         self.batch_size = 10
 
     def update(self, inputs: List[ConfigClass], results: List[float]) -> None:
@@ -52,7 +49,9 @@ class Manipulator:
                 possible_vals.append(tmp_val)
         logger.info(f"Possible values: {possible_vals}")
 
-    def find_maximums(self, num: int, n_iter: int, log_interval: int):
+    def find_maximums(
+        self, num: int, n_iter: int, log_interval: int
+    ) -> List[ConfigClass]:
         """
         Find the best `num` sets of parameters
         """
@@ -62,7 +61,7 @@ class Manipulator:
             class for heapifying tuple[float, dict]
             """
 
-            def __init__(self, a: float, b: float) -> None:
+            def __init__(self, a: float, b: ConfigClass) -> None:
                 self.first = a
                 self.second = b
 
