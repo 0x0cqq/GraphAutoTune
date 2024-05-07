@@ -80,6 +80,19 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Answer: " << ans << std::endl;
 
+    // 5. 输出时间
+
+    std::ofstream time_file{TIME_RESULT_PATH};
+
+    if (!time_file.is_open()) {
+        std::cerr << "Cannot open the time file" << std::endl;
+        return 1;
+    }
+
+    time_file << double(duration) / 1000000 << std::endl;
+
+    time_file.close();
+
     // 输出结果
     return 0;
 }

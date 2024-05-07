@@ -20,9 +20,6 @@ class Driver:
 
         if not os.path.exists(build_path):
             os.makedirs(build_path)
-        else:
-            logger.debug("Build path already exists, skipping compilation")
-            return
 
         os.chdir(build_path)
 
@@ -51,14 +48,11 @@ class Driver:
             float: 时间
         """
 
+        if not os.path.exists(TUNING_PATH):
+            os.makedirs(TUNING_PATH)
+
         build_path = BUILD_PATH / config.fingerprint()
-
-        if not os.path.exists(build_path):
-            logger.warning("Build path does not exist, compiling...")
-            Driver.compile(config)
-        else:
-            logger.debug("Build path already exists, skipping compilation")
-
+        Driver.compile(config)
         os.chdir(build_path)
 
         logger.info(f"Running Job: <{job}> with options: <{options}>")
