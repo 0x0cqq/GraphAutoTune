@@ -83,6 +83,6 @@ class Driver:
         with open(get_counting_path(config_hash).as_posix(), "r") as f:
             count = int(f.read().strip())
 
-        logger.info(f"Time cost: {time_cost:.2f}s  count: {count}\n")
+        logger.info(f"Time cost: {time_cost:.10f}s  count: {count}\n")
 
         return time_cost

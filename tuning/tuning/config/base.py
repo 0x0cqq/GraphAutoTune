@@ -235,8 +235,19 @@ class ConfigClass(object):
         return ans
 
     @classmethod
-    def parse(cls, flat_dict: Dict[str, float]):
-        pass
+    def parse(cls, flat_dict: Dict[str, float]) -> "ConfigClass":
+        ret = {}
+        for key, value in cls.params.items():
+            if issubclass(value, ParamClass):
+                ret[key] = value(flat_dict[key])
+            else:
+                # 否则获得所有跟这个 ConfigClass 有关的参数
+                sub_dict = {}
+                for sub_key in flat_dict.keys():
+                    if sub_key.startswith(key + "."):
+                        sub_dict[sub_key[len(key) + 1 :]] = flat_dict[sub_key]
+                ret[key] = value.parse(sub_dict)
+        return cls(**ret)
 
     # hash 函数，用于判断两个 Config 是否相等
     def fingerprint(self) -> str:

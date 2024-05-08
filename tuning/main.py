@@ -20,7 +20,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # create context
-    model = Modeling()
+    model = Modeling(Config)
     manip = Manipulator(model, Config)
     tuner = Tuner(
         JOB_NAME,
@@ -35,12 +35,9 @@ if __name__ == "__main__":
         logger.info(
             f"Best configuration: {best_pair[0]}, estimated time cost: {best_pair[1]:.2f}s"
         )
-        with open(CONF_PATH, "w") as f:
-            json.dump(best_pair[0], f, indent=4)
-        logger.info("Best configuration dumped in ./best_config.json")
     elif mode == "run_default":
         # run default configuration
-        
+
         pass
     elif mode == "run_best":
         # run best configuration

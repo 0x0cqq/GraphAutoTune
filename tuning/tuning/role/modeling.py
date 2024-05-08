@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from typing import List
+from typing import List, Type
 
 import numpy as np
 import xgboost as xgb
@@ -26,10 +26,11 @@ class Modeling:
         "disable_default_eval_metric": 1,
     }
 
-    def __init__(self) -> None:
+    def __init__(self, config_class: Type[ConfigClass]) -> None:
         self.xs: List[ConfigClass] = []
         self.ys: List[float] = []
         self.bst: xgb.Booster | None = None
+        self.config_class = config_class
 
         self.__load()
         self.__fit()
@@ -46,7 +47,7 @@ class Modeling:
         with open(path, "r") as f:
             records = json.load(f)
             for res in records:
-                self.xs.append(res[0])
+                self.xs.append(self.config_class.parse(res[0]))
                 self.ys.append(res[1])
         assert len(self.xs) == len(self.ys), "Length of xs and ys should be the same."
         logger.info(f"Loaded {len(self.ys)} records from file.")
@@ -82,12 +83,11 @@ class Modeling:
     # 用性能模型预测
     def predict_list(self, data_x: List[ConfigClass]) -> List[float]:
         matrix_x = [item.get_list() for item in data_x]
-        print(matrix_x)
         dtest = xgb.DMatrix(np.asanyarray(matrix_x))
         return self.bst.predict(dtest)
 
     def predict(self, data_x: ConfigClass) -> float:
-        return self.predict_list([data_x.get_list()])[0]
+        return self.predict_list([data_x])[0]
 
     # 添加一组新的数据
     def update(self, new_x: ConfigClass, new_y: float):
@@ -96,7 +96,7 @@ class Modeling:
 
         self.__dump()
 
-        self.__fit(self.xs, self.ys)
+        self.__fit()
 
     def update_list(self, new_xs: List[ConfigClass], new_ys: List[float]):
         self.xs.extend(new_xs)
@@ -104,4 +104,4 @@ class Modeling:
 
         self.__dump()
 
-        self.__fit(self.xs, self.ys)
+        self.__fit()
