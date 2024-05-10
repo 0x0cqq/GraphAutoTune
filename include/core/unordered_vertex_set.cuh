@@ -1,4 +1,6 @@
 #pragma once
+#include <cooperative_groups.h>
+
 #include <array>
 
 #include "configs/launch_config.hpp"
@@ -6,11 +8,12 @@
 
 using namespace LaunchConfig;
 
+namespace cg = cooperative_groups;
+
 namespace Core {
 
 // 这个是用来存储已经遍历的节点
 template <int SIZE>
-requires(SIZE < THREADS_PER_WARP)
 class UnorderedVertexSet {
     VIndex_t _data[SIZE];
 
@@ -21,11 +24,6 @@ class UnorderedVertexSet {
     }
 
     __device__ VIndex_t get(int pos) const { return _data[pos]; }
-
-    __device__ void clear() {
-        const int lid = threadIdx.x % THREADS_PER_WARP;
-        if (lid < SIZE) _data[lid] = -1;
-    }
 
     __device__ void copy(const UnorderedVertexSet<SIZE>& other) {
         const int lid = threadIdx.x % THREADS_PER_WARP;

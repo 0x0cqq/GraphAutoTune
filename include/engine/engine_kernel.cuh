@@ -1,10 +1,14 @@
 #pragma once
 
+#include <cooperative_groups.h>
+
 #include "configs/launch_config.hpp"
 #include "engine/context.cuh"
 #include "engine/storage.cuh"
 
 using namespace LaunchConfig;
+
+namespace cg = cooperative_groups;
 
 namespace Engine {
 
@@ -19,12 +23,13 @@ template <Config config>
 __global__ void set_vertex_set_space_kernel(PrefixStorage<config> p_storage) {
     constexpr int NUMS_UNIT = config.engine_config.nums_unit;
     constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
-    const int wid = threadIdx.x / 32;
-    const int global_wid = blockIdx.x * WARPS_PER_BLOCK + wid;
 
-    for (int base = 0; base < NUMS_UNIT; base += num_total_warps) {
-        VIndex_t uid = base + global_wid;
-        if (uid >= NUMS_UNIT) continue;
+    auto grid = cg::this_grid();
+
+    const int global_tid = grid.thread_rank();
+    const int num_threads = grid.num_threads();
+
+    for (int uid = global_tid; uid < NUMS_UNIT; uid += num_threads) {
         p_storage.vertex_set[uid].init_empty(
             p_storage.space + uid * MAX_SET_SIZE, MAX_SET_SIZE);
     }
@@ -38,22 +43,20 @@ __global__ void first_extend_kernel(DeviceContext<config> context,
                                     PrefixStorage<config> p_storage,
                                     VertexStorage<config> v_storage,
                                     VIndex_t start_vid, VIndex_t end_vid) {
-    const int warp_id = threadIdx.x / THREADS_PER_WARP;
-    const int lane_id = threadIdx.x % THREADS_PER_WARP;
-    const int global_warp_id = blockIdx.x * WARPS_PER_BLOCK + warp_id;
+    auto grid = cg::this_grid();
 
-    for (VIndex_t base = start_vid; base < end_vid; base += num_total_warps) {
-        VIndex_t vid = base + global_warp_id;
-        if (vid >= end_vid) continue;
+    const int global_tid = grid.thread_rank();
+    const int num_threads = grid.num_threads();
+
+    for (VIndex_t vid = start_vid + global_tid; vid < end_vid;
+         vid += num_threads) {
         VIndex_t uid = vid - start_vid;
 
         VIndex_t *neighbors = context.graph_backend.get_neigh(vid);
         VIndex_t neighbors_cnt = context.graph_backend.get_neigh_cnt(vid);
         p_storage.vertex_set[uid].use_copy(neighbors, neighbors_cnt);
-        if (lane_id == 0) {
-            v_storage.subtraction_set[uid].set<0>(vid);
-            v_storage.prev_uid[uid * MAX_VERTEXES + 0] = uid;
-        }
+        v_storage.subtraction_set[uid].set<0>(vid);
+        v_storage.prev_uid[uid * MAX_VERTEXES + 0] = uid;
     }
 }
 
@@ -113,8 +116,10 @@ __global__ void extend_v_storage_kernel(const DeviceContext<config> context,
                                         int base_extend_unit_id,
                                         int num_extend_units) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
-    const int global_tid = blockIdx.x * blockDim.x + threadIdx.x;
-    const int num_threads = gridDim.x * blockDim.x;
+
+    auto grid = cg::this_grid();
+    const int global_tid = grid.thread_rank();
+    const int num_threads = grid.num_threads();
 
     for (int base = 0; base < num_extend_units; base += num_threads) {
         int next_extend_uid = base + global_tid;
@@ -175,8 +180,9 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     using VertexSet = VertexSetTypeDispatcher<config>::type;
     __shared__ VertexSet new_vertex_sets[WARPS_PER_BLOCK];
 
-    const int warp_id = threadIdx.x / THREADS_PER_WARP;
-    const int global_wid = blockIdx.x * WARPS_PER_BLOCK + warp_id;
+    auto grid = cg::this_grid();
+    auto block = cg::this_thread_block();
+    auto warp = cg::tiled_partition<THREADS_PER_WARP>(block);
 
     // 下一个点的 loop_set_prefix_id
     const int loop_set_prefix_id =
@@ -189,11 +195,12 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     const int end_prefix_id =
         context.schedule_data.vertex_prefix_start[cur_pattern_vid + 2];
 
-    // load 我们可能需要的所有 Prefix 的 信息，这些后面都是公用的
-    // 到 shared memory
+    // load 我们可能需要的所有 Prefix 的信息到 shared memory
+    // 这些后面都是公用的
     __shared__ VertexSet *shared_vertex_set[MAX_PREFIXS],
         *father_vertex_set_shared[MAX_PREFIXS];
-    const int tid = threadIdx.x;
+
+    const int tid = block.thread_rank();
     if (tid < end_prefix_id - start_prefix_id) {
         shared_vertex_set[tid] = p_storages[start_prefix_id + tid].vertex_set;
         int father_prefix_id =
@@ -204,7 +211,11 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     }
 
     __threadfence_block();
-    __syncthreads();
+    block.sync();
+
+    const int warp_id = warp.meta_group_rank();
+    const int global_wid =
+        block.group_index().x * warp.meta_group_size() + warp_id;
 
     for (int base = 0; base < num_extend_units; base += num_total_warps) {
         int next_extend_uid = base + global_wid;
@@ -223,7 +234,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
         VIndex_t *neighbors = context.graph_backend.get_neigh(v);
         VIndex_t neighbors_cnt = context.graph_backend.get_neigh_cnt(v);
         VertexSet &new_vertex_set = new_vertex_sets[warp_id];
-        new_vertex_set.init(neighbors, neighbors_cnt);
+        new_vertex_set.init(warp, neighbors, neighbors_cnt);
 
         bool appeared = cur_subtraction_set.has_data<cur_pattern_vid + 1>(v);
         // 构建所有 prefix 对应的 p_storage
@@ -249,7 +260,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
                 context.schedule_data.prefixs_father[cur_prefix_id];
             if (father_prefix_id == -1) {
                 // 没有 father，直接使用邻居
-                next_vertex_set.use_copy(neighbors, neighbors_cnt);
+                next_vertex_set.use_copy(warp, neighbors, neighbors_cnt);
             } else {
                 // 如果有 father，那么需要和 father 的 vertex set 取交集
                 int father_unit_id = find_prefix_level_uid<config>(
@@ -257,13 +268,14 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
                 const auto &father_vertex_set =
                     father_vertex_set_shared[index][father_unit_id];
                 if (!only_need_size) {
-                    next_vertex_set.intersect(new_vertex_set,
+                    next_vertex_set.intersect(warp, new_vertex_set,
                                               father_vertex_set);
                 } else {
                     // 如果只需要 size，我们就做一个非常简单的相交。
                     // 但这个时候我们需要把 cur_subtraction_set 直接给挖掉
                     next_vertex_set.intersect_size<cur_pattern_vid + 1>(
-                        new_vertex_set, father_vertex_set, cur_subtraction_set);
+                        warp, new_vertex_set, father_vertex_set,
+                        cur_subtraction_set);
                 }
             }
         }

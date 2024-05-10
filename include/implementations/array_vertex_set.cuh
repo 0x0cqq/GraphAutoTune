@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
+#include <cooperative_groups/scan.h>
 
 #include <array>
 #include <concepts>
@@ -11,6 +13,8 @@
 #include "consts/general_consts.hpp"
 #include "core/types.hpp"
 #include "core/unordered_vertex_set.cuh"
+
+namespace cg = cooperative_groups;
 
 namespace GPU {
 
@@ -28,33 +32,47 @@ class ArrayVertexSet {
     VIndex_t* _data;
 
   public:
-    // 这个函数是 Init 函数，只会在程序开始的时候调用
-    __device__ void init_empty(VIndex_t* space, VIndex_t storage_size) {
+    template <unsigned int Size>
+    __device__ void init_empty(
+        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        VIndex_t* space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
-        const int lid = threadIdx.x % THREADS_PER_WARP;
-        if (lid == 0) {
+        if (warp.thread_rank() == 0) {
             _space = space, _data = space;
             _allocated_size = storage_size, _size = 0;
         }
     }
 
-    // 这个函数只是用来临时创建空间的，比如给 neighbor vertex 临时给一个 Vertex
-    // Set
-    __device__ void init(VIndex_t* input_data, VIndex_t input_size) {
+    __device__ void init_empty(VIndex_t* space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
-        const int lid = threadIdx.x % THREADS_PER_WARP;
-        if (lid == 0) {
+        _space = space, _data = space;
+        _allocated_size = storage_size, _size = 0;
+    }
+
+    // 是用来临时创建空间的，比如给 neighbor vertex 临时给一个 Vertex Set
+    template <unsigned int Size>
+    __device__ void init(
+        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        VIndex_t* input_data, VIndex_t input_size) {
+        static_assert(config.vertex_set_config.vertex_store_type == Array);
+        if (warp.thread_rank() == 0) {
             _data = input_data, _size = input_size;
             _space = nullptr, _allocated_size = 0;
         }
     }
 
-    __device__ void use_copy(VIndex_t* input_data, VIndex_t input_size) {
+    template <unsigned int Size>
+    __device__ void use_copy(cg::thread_block_tile<Size, cg::thread_block> warp,
+                             VIndex_t* input_data, VIndex_t input_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
-        const int lid = threadIdx.x % THREADS_PER_WARP;
-        if (lid == 0) {
+        if (warp.thread_rank() == 0) {
             _size = input_size, _data = input_data;
         }
+    }
+
+    __device__ void use_copy(VIndex_t* input_data, VIndex_t input_size) {
+        static_assert(config.vertex_set_config.vertex_store_type == Array);
+        _size = input_size, _data = input_data;
     }
 
     __device__ inline VIndex_t get(VIndex_t idx) const { return _data[idx]; }
@@ -72,14 +90,17 @@ class ArrayVertexSet {
     subtraction_size_onethread(const Core::UnorderedVertexSet<SIZE>& set);
 
     // 对 Output 没有任何假设，除了空间是够的之外。
-    // TODO: 或可以用 __restrict__ 修饰符加速
-    __device__ void intersect(const ArrayVertexSet& a, const ArrayVertexSet& b);
+    template <unsigned int Size>
+    __device__ void intersect(
+        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        ArrayVertexSet& a, const ArrayVertexSet& b);
 
     // size 会保存到当前的 vertex
-    template <int depth, int SIZE>
-    __device__ void intersect_size(const ArrayVertexSet& a,
-                                   const ArrayVertexSet& b,
-                                   const Core::UnorderedVertexSet<SIZE>& set);
+    template <int depth, int SIZE, unsigned int Size>
+    __device__ void intersect_size(
+        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        const ArrayVertexSet& a, const ArrayVertexSet& b,
+        const Core::UnorderedVertexSet<SIZE>& set);
 };
 
 }  // namespace GPU
@@ -127,54 +148,43 @@ inline __device__ bool search_dispatcher(VIndex_t u, const VIndex_t* b,
     }
 }
 
-template <Config config>
-__device__ VIndex_t do_intersection_parallel(VIndex_t* out, const VIndex_t* a,
-                                             const VIndex_t* b, VIndex_t na,
-                                             VIndex_t nb) {
-    __shared__ VIndex_t block_out_offset[THREADS_PER_BLOCK];
+template <Config config, unsigned int Size>
+__device__ VIndex_t do_intersection_parallel(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
+    const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     __shared__ VIndex_t block_out_size[WARPS_PER_BLOCK];
 
-    int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
-    int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
-    VIndex_t* out_offset = block_out_offset + wid * THREADS_PER_WARP;
+    const int wid = warp.meta_group_rank();  // warp id
+    const int lid = warp.thread_rank();      // lane id
     VIndex_t& out_size = block_out_size[wid];
 
     if (lid == 0) out_size = 0;
 
-    for (int num_done = 0; num_done < na; num_done += THREADS_PER_WARP) {
-        bool found = false;
+    for (int base = 0; base < na; base += Size) {
+        int found = 0;
         VIndex_t u = 0;
-        if (num_done + lid < na) {
-            u = a[num_done + lid];  // u: an element in set a
-            found = search_dispatcher<config>(u, b, nb);
+        if (base + lid < na) {
+            u = a[base + lid];  // u: an element in set a
+            found = int(search_dispatcher<config>(u, b, nb));
         }
-        out_offset[lid] = found;
+
+        const int offset = cg::inclusive_scan(warp, found);
+
         __threadfence_block();
-
-#pragma unroll
-        for (int s = 1; s < THREADS_PER_WARP; s *= 2) {
-            uint32_t v = lid >= s ? out_offset[lid - s] : 0;
-            __threadfence_block();
-            out_offset[lid] += v;
-            __threadfence_block();
-        }
-
-        if (found) {
-            uint32_t offset = out_offset[lid] - 1;
-            out[out_size + offset] = u;
-        }
-
-        if (lid == 0) out_size += out_offset[THREADS_PER_WARP - 1];
+        if (found) out[out_size + offset - 1] = u;
+        if (lid == Size - 1) out_size += offset;
     }
 
     __threadfence_block();
     return out_size;
 }
 
-template <Config config>
-__device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
-                                           const VIndex_t* b, VIndex_t na,
-                                           VIndex_t nb) {
+template <Config config, unsigned int Size>
+__device__ VIndex_t do_intersection_serial(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
+    const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     int out_size = 0;
 
     for (int num_done = 0; num_done < na; num_done++) {
@@ -186,41 +196,23 @@ __device__ VIndex_t do_intersection_serial(VIndex_t* out, const VIndex_t* a,
     return out_size;
 }
 
-template <Config config>
-__device__ VIndex_t do_intersection_dispatcher(VIndex_t* out, const VIndex_t* a,
-                                               const VIndex_t* b, VIndex_t na,
-                                               VIndex_t nb) {
+template <Config config, unsigned int Size>
+__device__ VIndex_t do_intersection_dispatcher(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
+    const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     if constexpr (config.vertex_set_config.set_intersection_type == Parallel) {
-        return do_intersection_parallel<config>(out, a, b, na, nb);
+        return do_intersection_parallel<config>(warp, out, a, b, na, nb);
     } else {
-        return do_intersection_serial<config>(out, a, b, na, nb);
+        return do_intersection_serial<config>(warp, out, a, b, na, nb);
     }
 }
 
-template <Config config>
-__device__ void ArrayVertexSet<config>::intersect(const ArrayVertexSet& a,
-                                                  const ArrayVertexSet& b) {
-    const int lane_id = threadIdx.x % THREADS_PER_WARP;
-    if (lane_id == 0) {
-        atomicAdd(&counter, 1);
-    }
-    __syncwarp();
-
-    VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
-        this->_space, a.data(), b.data(), a.size(), b.size());
-
-    if (lane_id == 0) {
-        this->_data = this->_space;
-        this->_size = after_intersect_size;
-    }
-}
-
-template <Config config, int depth, int SIZE>
+template <Config config, int depth, int SIZE, unsigned int Size>
 __device__ VIndex_t do_intersection_serial_size(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
-    int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
-    int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
     int out_size = 0;
 
     VIndex_t u = 0;
@@ -233,20 +225,15 @@ __device__ VIndex_t do_intersection_serial_size(
     return out_size;
 }
 
-template <Config config, int depth, int SIZE>
+template <Config config, int depth, int SIZE, unsigned int Size>
 __device__ VIndex_t do_intersection_parallel_size(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
-    int wid = threadIdx.x / THREADS_PER_WARP;  // warp id
-    int lid = threadIdx.x % THREADS_PER_WARP;  // lane id
-
-    typedef cub::WarpReduce<VIndex_t> WarpReduce;
-
-    __shared__ typename WarpReduce::TempStorage temp_storage[THREADS_PER_WARP];
+    int lid = warp.thread_rank();
 
     VIndex_t out_size = 0;
-
-    for (int num_done = 0; num_done < na; num_done += THREADS_PER_WARP) {
+    for (int num_done = 0; num_done < na; num_done += Size) {
         bool found = false;
         VIndex_t u = 0;
         if (num_done + lid < na) {
@@ -256,33 +243,47 @@ __device__ VIndex_t do_intersection_parallel_size(
         }
         out_size += found;
     }
-
-    __syncwarp();
-    int aggregate = WarpReduce(temp_storage[wid]).Sum(out_size);
-    __syncwarp();
+    VIndex_t aggregate = cg::reduce(warp, out_size, cg::plus<VIndex_t>());
     // only available in lid == 0
     return aggregate;
 }
 
-template <Config config, int depth, int SIZE>
+template <Config config, int depth, int SIZE, unsigned int Size>
 __device__ VIndex_t do_intersection_dispatcher_size(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
     if constexpr (config.vertex_set_config.set_intersection_type == Parallel) {
-        return do_intersection_parallel_size<config, depth>(a, b, na, nb, set);
+        return do_intersection_parallel_size<config, depth>(warp, a, b, na, nb,
+                                                            set);
     } else {
-        return do_intersection_serial_size<config, depth>(a, b, na, nb, set);
+        return do_intersection_serial_size<config, depth>(warp, a, b, na, nb,
+                                                          set);
+    }
+}
+template <Config config>
+template <unsigned int Size>
+__device__ void ArrayVertexSet<config>::intersect(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b) {
+    VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
+        warp, this->_space, a.data(), b.data(), a.size(), b.size());
+
+    if (warp.thread_rank() == 0) {
+        this->_data = this->_space;
+        this->_size = after_intersect_size;
     }
 }
 
 template <Config config>
-template <int depth, int SIZE>
+template <int depth, int SIZE, unsigned int Size>
 __device__ void ArrayVertexSet<config>::intersect_size(
+    const cg::thread_block_tile<Size, cg::thread_block>& warp,
     const ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b,
     const Core::UnorderedVertexSet<SIZE>& set) {
     // 一个低成本的计算交集大小的function
     this->_size = do_intersection_dispatcher_size<config, depth>(
-        a.data(), b.data(), a.size(), b.size(), set);
+        warp, a.data(), b.data(), a.size(), b.size(), set);
 }
 
 template <Config config>

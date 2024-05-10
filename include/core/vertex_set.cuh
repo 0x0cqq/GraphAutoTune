@@ -7,7 +7,6 @@
 
 // implementations
 #include "implementations/array_vertex_set.cuh"
-#include "implementations/bitmap_vertex_set.cuh"
 
 namespace Core {
 
@@ -29,11 +28,4 @@ requires(config.vertex_set_config.vertex_store_type == Array)
 class VertexSetTypeDispatcher<config> {
   public:
     using type = GPU::ArrayVertexSet<config>;
-};
-
-template <Config config>
-requires(config.vertex_set_config.vertex_store_type == Bitmap)
-class VertexSetTypeDispatcher<config> {
-  public:
-    using type = GPU::BitmapVertexSet<config>;
 };
