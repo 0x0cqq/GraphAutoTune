@@ -32,9 +32,9 @@ class ArrayVertexSet {
     VIndex_t* _data;
 
   public:
-    template <unsigned int Size>
+    template <unsigned int WarpSize>
     __device__ void init_empty(
-        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
         VIndex_t* space, VIndex_t storage_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         if (warp.thread_rank() == 0) {
@@ -50,9 +50,9 @@ class ArrayVertexSet {
     }
 
     // 是用来临时创建空间的，比如给 neighbor vertex 临时给一个 Vertex Set
-    template <unsigned int Size>
+    template <unsigned int WarpSize>
     __device__ void init(
-        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
         VIndex_t* input_data, VIndex_t input_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         if (warp.thread_rank() == 0) {
@@ -61,9 +61,10 @@ class ArrayVertexSet {
         }
     }
 
-    template <unsigned int Size>
-    __device__ void use_copy(cg::thread_block_tile<Size, cg::thread_block> warp,
-                             VIndex_t* input_data, VIndex_t input_size) {
+    template <unsigned int WarpSize>
+    __device__ void use_copy(
+        cg::thread_block_tile<WarpSize, cg::thread_block> warp,
+        VIndex_t* input_data, VIndex_t input_size) {
         static_assert(config.vertex_set_config.vertex_store_type == Array);
         if (warp.thread_rank() == 0) {
             _size = input_size, _data = input_data;
@@ -90,15 +91,15 @@ class ArrayVertexSet {
     subtraction_size_onethread(const Core::UnorderedVertexSet<SIZE>& set);
 
     // 对 Output 没有任何假设，除了空间是够的之外。
-    template <unsigned int Size>
+    template <unsigned int WarpSize>
     __device__ void intersect(
-        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
         ArrayVertexSet& a, const ArrayVertexSet& b);
 
     // size 会保存到当前的 vertex
-    template <int depth, int SIZE, unsigned int Size>
+    template <int depth, int SIZE, unsigned int WarpSize>
     __device__ void intersect_size(
-        const cg::thread_block_tile<Size, cg::thread_block>& warp,
+        const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
         const ArrayVertexSet& a, const ArrayVertexSet& b,
         const Core::UnorderedVertexSet<SIZE>& set);
 };
@@ -110,16 +111,19 @@ namespace GPU {
 // 用二进制的方法重写这个二分，这样就没准可以循环展开了
 inline __device__ bool binary_search(const VIndex_t u, const VIndex_t* b,
                                      const VIndex_t nb) {
+    __shared__ VIndex_t caching[THREADS_PER_BLOCK];
+    VIndex_t& my_caching = caching[threadIdx.x];
     if (nb == 0) return false;
     // 获取 nb 最高位的二进制位数
     const VIndex_t p = 32 - __clz(nb - 1);
     VIndex_t n = 0;
+#pragma unroll
     // 每次决定一个二进制位，从高到低
     for (int i = p - 1; i >= 0; i--) {
         // 这次决定的是从高往低的第 i 位
         const VIndex_t index = n | (1 << i);
         // 往右侧走
-        if (index < nb && b[index] <= u) {
+        if (index < nb && my_caching <= u) {
             n = index;
         }
     }
@@ -148,9 +152,9 @@ inline __device__ bool search_dispatcher(VIndex_t u, const VIndex_t* b,
     }
 }
 
-template <Config config, unsigned int Size>
+template <Config config, unsigned int WarpSize>
 __device__ VIndex_t do_intersection_parallel(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
     const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     __shared__ VIndex_t block_out_size[WARPS_PER_BLOCK];
@@ -161,7 +165,7 @@ __device__ VIndex_t do_intersection_parallel(
 
     if (lid == 0) out_size = 0;
 
-    for (int base = 0; base < na; base += Size) {
+    for (int base = 0; base < na; base += WarpSize) {
         int found = 0;
         VIndex_t u = 0;
         if (base + lid < na) {
@@ -173,16 +177,16 @@ __device__ VIndex_t do_intersection_parallel(
 
         __threadfence_block();
         if (found) out[out_size + offset - 1] = u;
-        if (lid == Size - 1) out_size += offset;
+        if (lid == WarpSize - 1) out_size += offset;
     }
 
     __threadfence_block();
     return out_size;
 }
 
-template <Config config, unsigned int Size>
+template <Config config, unsigned int WarpSize>
 __device__ VIndex_t do_intersection_serial(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
     const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     int out_size = 0;
@@ -196,9 +200,9 @@ __device__ VIndex_t do_intersection_serial(
     return out_size;
 }
 
-template <Config config, unsigned int Size>
+template <Config config, unsigned int WarpSize>
 __device__ VIndex_t do_intersection_dispatcher(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
     const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     if constexpr (config.vertex_set_config.set_intersection_type == Parallel) {
@@ -208,9 +212,9 @@ __device__ VIndex_t do_intersection_dispatcher(
     }
 }
 
-template <Config config, int depth, int SIZE, unsigned int Size>
+template <Config config, int depth, int SIZE, unsigned int WarpSize>
 __device__ VIndex_t do_intersection_serial_size(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
     int out_size = 0;
@@ -225,15 +229,15 @@ __device__ VIndex_t do_intersection_serial_size(
     return out_size;
 }
 
-template <Config config, int depth, int SIZE, unsigned int Size>
+template <Config config, int depth, int SIZE, unsigned int WarpSize>
 __device__ VIndex_t do_intersection_parallel_size(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
     int lid = warp.thread_rank();
 
     VIndex_t out_size = 0;
-    for (int num_done = 0; num_done < na; num_done += Size) {
+    for (int num_done = 0; num_done < na; num_done += WarpSize) {
         bool found = false;
         VIndex_t u = 0;
         if (num_done + lid < na) {
@@ -248,9 +252,9 @@ __device__ VIndex_t do_intersection_parallel_size(
     return aggregate;
 }
 
-template <Config config, int depth, int SIZE, unsigned int Size>
+template <Config config, int depth, int SIZE, unsigned int WarpSize>
 __device__ VIndex_t do_intersection_dispatcher_size(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
     if constexpr (config.vertex_set_config.set_intersection_type == Parallel) {
@@ -262,9 +266,9 @@ __device__ VIndex_t do_intersection_dispatcher_size(
     }
 }
 template <Config config>
-template <unsigned int Size>
+template <unsigned int WarpSize>
 __device__ void ArrayVertexSet<config>::intersect(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b) {
     VIndex_t after_intersect_size = do_intersection_dispatcher<config>(
         warp, this->_space, a.data(), b.data(), a.size(), b.size());
@@ -276,9 +280,9 @@ __device__ void ArrayVertexSet<config>::intersect(
 }
 
 template <Config config>
-template <int depth, int SIZE, unsigned int Size>
+template <int depth, int SIZE, unsigned int WarpSize>
 __device__ void ArrayVertexSet<config>::intersect_size(
-    const cg::thread_block_tile<Size, cg::thread_block>& warp,
+    const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     const ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b,
     const Core::UnorderedVertexSet<SIZE>& set) {
     // 一个低成本的计算交集大小的function
