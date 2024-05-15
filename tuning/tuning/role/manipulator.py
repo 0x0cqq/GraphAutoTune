@@ -15,16 +15,23 @@ logger = logging.getLogger("manipulator")
 
 
 class Manipulator:
-    def __init__(self, model: Modeling, config_class: ConfigClass):
-        self.best_config = (None, FLOAT_INF)
+    def __init__(self, model: Modeling):
+        """构造 Manipulator
+
+        Args:
+            model (Modeling): 代价模型
+        """
         self.model = model
-        self.config_space = ConfigSpace(config_class)
+        self.config_space = ConfigSpace(model.config_class)
+        self.best_config = (None, FLOAT_INF)
         self.batch_size = 10
 
     def update(self, inputs: List[ConfigClass], results: List[float]) -> None:
-        """
-        Add a test result to the manipulator.
-        XGBoost does not support additional training, so re-train a model each time.
+        """添加若干的结果到代价模型中
+
+        Args:
+            inputs (List[ConfigClass]): x 点，参数空间中的点
+            results (List[float]): y点，运行效率
         """
 
         assert len(inputs) == len(
@@ -36,18 +43,17 @@ class Manipulator:
         ), f"inputs: {inputs} are not of type {self.config_space.config_class.__name__}"
 
         if len(inputs) == 0:
-            logger.debug("No data to update.")
+            logger.debug("Provide empty inputs, skip update in manipulator.")
             return
 
         self.model.update_list(inputs, results)
 
         possible_vals: List[float] = []
-        logger.info("After update:")
         for tmp in self.config_space.config_space():
             tmp_val = self.model.predict(tmp)
             if tmp_val not in possible_vals:
                 possible_vals.append(tmp_val)
-        logger.info(f"Possible values: {possible_vals}")
+        logger.info(f"After update, possible values: {possible_vals}")
 
     def find_maximums(
         self, num: int, n_iter: int, log_interval: int

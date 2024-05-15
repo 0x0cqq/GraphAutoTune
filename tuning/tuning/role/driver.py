@@ -12,6 +12,11 @@ logger = logging.getLogger("driver")
 class Driver:
     @staticmethod
     def compile(config: Config):
+        """根据Config生成可执行文件
+
+        Args:
+            config (Config): 配置 config 对象
+        """
 
         definitions = ""
 
@@ -47,7 +52,8 @@ class Driver:
 
     @staticmethod
     def run(job: str, options: List[str], config: Config) -> float:
-        """运行程序
+        """
+        根据 Config 运行程序
 
         Returns:
             float: 时间

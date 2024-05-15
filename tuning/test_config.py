@@ -10,13 +10,14 @@ print(config)
 print(config.get_list())
 
 
-# config_space = ConfigSpace(Config)
+config_space = ConfigSpace(Config)
 
-# random_config = config_space.random_configuration()
+random_config = config_space.random_configuration()
 
-# for i in range(10):
-#     print(random_config)
-#     random_config = config_space.random_walk(random_config)
+for i in range(10):
+    print(random_config)
+    print(random_config.get_list())
+    random_config = config_space.random_walk(random_config)
 
 # print("------")
 

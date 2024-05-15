@@ -109,10 +109,8 @@ class ArrayVertexSet {
 namespace GPU {
 
 // 用二进制的方法重写这个二分，这样就没准可以循环展开了
-inline __device__ bool binary_search(const VIndex_t u, const VIndex_t* b,
-                                     const VIndex_t nb) {
-    __shared__ VIndex_t caching[THREADS_PER_BLOCK];
-    VIndex_t& my_caching = caching[threadIdx.x];
+__device__ bool binary_search(const VIndex_t u, const VIndex_t* b,
+                              const VIndex_t nb) {
     if (nb == 0) return false;
     // 获取 nb 最高位的二进制位数
     const VIndex_t p = 32 - __clz(nb - 1);
@@ -123,15 +121,16 @@ inline __device__ bool binary_search(const VIndex_t u, const VIndex_t* b,
         // 这次决定的是从高往低的第 i 位
         const VIndex_t index = n | (1 << i);
         // 往右侧走
-        if (index < nb && my_caching <= u) {
+        VIndex_t x = b[index];
+        if (index < nb && x <= u) {
             n = index;
         }
     }
     return b[n] == u;
 }
 
-inline __device__ bool linear_search(const VIndex_t u, const VIndex_t* b,
-                                     const VIndex_t nb) {
+__device__ bool linear_search(const VIndex_t u, const VIndex_t* b,
+                              const VIndex_t nb) {
     for (int idx_b = 0; idx_b < nb; idx_b++) {
         if (b[idx_b] == u) {
             return true;
@@ -143,8 +142,7 @@ inline __device__ bool linear_search(const VIndex_t u, const VIndex_t* b,
 }
 
 template <Config config>
-inline __device__ bool search_dispatcher(VIndex_t u, const VIndex_t* b,
-                                         VIndex_t nb) {
+__device__ bool search_dispatcher(VIndex_t u, const VIndex_t* b, VIndex_t nb) {
     if constexpr (config.vertex_set_config.set_search_type == Binary) {
         return binary_search(u, b, nb);
     } else {
@@ -230,20 +228,19 @@ __device__ VIndex_t do_intersection_serial_size(
 }
 
 template <Config config, int depth, int SIZE, unsigned int WarpSize>
-__device__ VIndex_t do_intersection_parallel_size(
+inline __device__ VIndex_t do_intersection_parallel_size(
     const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
     int lid = warp.thread_rank();
 
     VIndex_t out_size = 0;
-    for (int num_done = 0; num_done < na; num_done += WarpSize) {
+    for (int base = 0; base < na; base += WarpSize) {
         bool found = false;
-        VIndex_t u = 0;
-        if (num_done + lid < na) {
-            u = a[num_done + lid];  // u: an element in set a
-            found = search_dispatcher<config>(u, b, nb) &&
-                    !set.has_data_single_thread<depth>(u);
+        if (base + lid < na) {
+            VIndex_t u = a[base + lid];  // u: an element in set a
+            found = !set.has_data_single_thread<depth>(u) &&
+                    search_dispatcher<config>(u, b, nb);
         }
         out_size += found;
     }

@@ -11,22 +11,6 @@ from ..common.const import *
 U = Union[str, int, float]
 
 
-# 将一个 Dict 转换成一个 List[float]
-# 用于将参数空间的点转换成 XGBoost 的输入
-def dict2list(params: Dict) -> List[float]:
-    ret = []
-    for key, val in params.items():
-        if isinstance(val, str):
-            digest = hashlib.md5(val.encode()).digest()
-            # 成为一个 int
-            # 截取前 4 个字节
-            int_digest = int.from_bytes(digest[:4], byteorder="big")
-            ret.append(int_digest)
-        else:
-            ret.append(val)
-    return ret
-
-
 # 通用的 Param 类，我们目前只支持离散的变量
 class ParamClass(object):
     T = TypeVar("T", str, int, float)
@@ -66,6 +50,9 @@ class ParamClass(object):
 
     def get_value(self) -> T:
         return self.value
+
+    def get_index(self) -> int:
+        return self.values.index(self.value)
 
     def __str__(self) -> str:
         return f"{self.value}"
@@ -180,7 +167,7 @@ class ConfigClass(object):
                     setattr(self, key, value.get_default_value())
 
     @classmethod
-    def get_flat_params(cls) -> Dict[str, ParamClass]:
+    def get_flat_params(cls) -> Dict[str, Type[ParamClass]]:
         ret = {}
         for key, value in cls.params.items():
             if issubclass(value, ParamClass):
@@ -199,11 +186,12 @@ class ConfigClass(object):
                     ret[key + "." + sub_key] = sub_value
         return ret
 
-    def get_flat_dict(self) -> Dict[str, float]:
+    # 这里获得的
+    def get_flat_dict(self) -> Dict[str, ParamClass]:
         ret = {}
         for key, value in self.params.items():
             if issubclass(value, ParamClass):
-                ret[key] = getattr(self, key).get_value()
+                ret[key] = getattr(self, key)
             else:
                 temp = getattr(self, key).get_flat_dict()
                 for sub_key, sub_value in temp.items():
@@ -213,8 +201,11 @@ class ConfigClass(object):
                     ret[key + "." + sub_key] = sub_value
         return ret
 
-    def get_list(self) -> List[float]:
-        return dict2list(self.get_flat_dict())
+    def get_list(self) -> List[int]:
+        flat_dict = self.get_flat_dict()
+        # ordered by key
+        flat_dict = sorted(flat_dict.items(), key=lambda x: x[0])
+        return [item.get_index() for _, item in flat_dict]
 
     def export(self, path: Path = GENERATED_CONFIG_PATH) -> None:
         with open(path, "w") as f:
@@ -227,15 +218,16 @@ class ConfigClass(object):
         return self.__class__(**ret)
 
     def __str__(self) -> str:
+        # sorted by key
         ans = "{"
         ans += ", ".join(
-            [f".{key} = {getattr(self, key)}" for key in self.params.keys()]
+            [f".{key} = {getattr(self, key)}" for key in sorted(self.params.keys())]
         )
         ans += "}"
         return ans
 
     @classmethod
-    def parse(cls, flat_dict: Dict[str, float]) -> "ConfigClass":
+    def parse(cls, flat_dict: Dict[str, Union[str, int, float]]) -> "ConfigClass":
         ret = {}
         for key, value in cls.params.items():
             if issubclass(value, ParamClass):
@@ -301,7 +293,18 @@ class ConfigSpace(object):
         assert isinstance(
             config, self.config_class
         ), f"Invalid config for {self.config_class.__name__}, which is a {type(config)}"
-        key = random.choice(list(self.flat_params.keys()))
+
+        while True:
+            key = random.choice(list(self.flat_params.keys()))
+
+            if len(self.flat_params[key].get_values()) == 1:
+                continue
+            else:
+                break
+
+        print(f"key = {key}")
+
+        print(f"self.flat_params = {self.flat_params}")
 
         # deepcopy 一份 config
         new_config = config.copy()
@@ -311,15 +314,17 @@ class ConfigSpace(object):
             value = self.flat_params[key].random_choice()
 
             # 逐层分析 key，然后赋值
-            keys = key.split(".")
+            level_keys = key.split(".")
             cur = new_config
-            for key in keys[:-1]:
-                cur = getattr(cur, key)
+            for this_key in level_keys[:-1]:
+                cur = getattr(cur, this_key)
+
+            last_key = level_keys[-1]
 
             # 如果选的值和原来的值不一样，就赋值
-            if getattr(cur, keys[-1]) != value:
-                # print(f"Change {key} from {getattr(cur, keys[-1])} to {value}")
-                setattr(cur, keys[-1], value)
+            if getattr(cur, last_key).get_index() != value.get_index():
+                print(f"Change {key} from {getattr(cur, last_key)} to {value}")
+                setattr(cur, last_key, value)
                 break
             else:
                 continue

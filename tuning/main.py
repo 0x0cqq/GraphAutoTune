@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     # create context
     model = Modeling(Config)
-    manip = Manipulator(model, Config)
+    manip = Manipulator(model)
     tuner = Tuner(
         JOB_NAME,
         [args.data, args.pattern],
