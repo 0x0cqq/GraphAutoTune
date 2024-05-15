@@ -23,3 +23,10 @@ parser.add_argument(
     choices=["tune", "run_default", "run_best"],
     help="The run mode of the tuning program",
 )
+parser.add_argument(
+    "-c",
+    "--clear",
+    default=False,
+    action="store_true",
+    help="Clear the tuning result and start from scratch",
+)

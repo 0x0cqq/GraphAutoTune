@@ -20,19 +20,24 @@ class Tuner:
         self.manipulator = manipulator
         self.best_time = FLOAT_INF
         self.max_round = 10
-        self.num_to_discover = 3
+        self.batch_size = 3
         self.warmup_examples = 3
 
-    def warmup(self, warmup_examples: int) -> None:
-        random_samples = self.manipulator.config_space.random_configurations(
-            warmup_examples
-        )
-        valid_trials, results = self.run(random_samples)
+    def _warmup(self, warmup_examples: int) -> None:
+        random_samples = self.manipulator.random_batch(warmup_examples)
+        valid_trials, results = self._run_batch(random_samples)
         self.manipulator.update(valid_trials, results)
 
-    def run(self, trials: List[ConfigClass]) -> Tuple[List[ConfigClass], List[float]]:
-        """
-        用于测试一组 trials 的性能
+    def _run_batch(
+        self, trials: List[ConfigClass]
+    ) -> Tuple[List[ConfigClass], List[float]]:
+        """测试一批参数的实际运行效率
+
+        Args:
+            trials (List[ConfigClass]): 参数空间中的点
+
+        Returns:
+            Tuple[List[ConfigClass], List[float]]: 有效的参数点和对应的运行效率
         """
         valid_trials = []
         results = []
@@ -50,22 +55,19 @@ class Tuner:
         logger.info(f"Start tuning... max_round: {self.max_round}")
 
         # 需要先用随机 sample 热身，不然 predict 跑不通
-        self.warmup(self.warmup_examples)
+        self._warmup(self.warmup_examples)
 
         for round_id in range(self.max_round):
             logger.info(f"Tuning round {round_id+1}/{self.max_round}")
 
-            trials = self.manipulator.find_maximums(self.num_to_discover, 40, 5)
-
-            valid_trials, results = self.run(trials)
-
-            logger.debug(f"len(valid_configs) = {len(valid_trials)}")
+            trials = self.manipulator.next_batch(self.batch_size)
+            valid_trials, results = self._run_batch(trials)
 
             # send to manipulator
             self.manipulator.update(valid_trials, results)
 
             logger.info(
-                f"Round {round_id+1} / {self.max_round}, best performance: {self.manipulator.best_config[1]:.2f}s",
+                f"Round {round_id + 1} / {self.max_round}, best performance: {self.manipulator.best_config[1]:.2f}s",
             )
 
         logger.info(

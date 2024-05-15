@@ -201,6 +201,20 @@ class ConfigClass(object):
                     ret[key + "." + sub_key] = sub_value
         return ret
 
+    def get_value_dict(self) -> Dict[str, U]:
+        ret = {}
+        for key, value in self.params.items():
+            if issubclass(value, ParamClass):
+                ret[key] = getattr(self, key).get_value()
+            else:
+                temp = getattr(self, key).get_value_dict()
+                for sub_key, sub_value in temp.items():
+                    assert (
+                        key + "." + sub_key not in ret
+                    ), f"Duplicate key {key + '.' + sub_key} in {self.name}'s value dict"
+                    ret[key + "." + sub_key] = sub_value
+        return ret
+
     def get_list(self) -> List[int]:
         flat_dict = self.get_flat_dict()
         # ordered by key
@@ -221,7 +235,7 @@ class ConfigClass(object):
         # sorted by key
         ans = "{"
         ans += ", ".join(
-            [f".{key} = {getattr(self, key)}" for key in sorted(self.params.keys())]
+            [f".{key} = {getattr(self, key)}" for key in self.params.keys()]
         )
         ans += "}"
         return ans
@@ -243,7 +257,9 @@ class ConfigClass(object):
 
     # hash 函数，用于判断两个 Config 是否相等
     def fingerprint(self) -> str:
-        return hashlib.md5(self.__str__().encode()).hexdigest()
+        flat_params_list = self.get_list()
+        hash_str = ",".join([str(x) for x in flat_params_list])
+        return hashlib.md5(hash_str.encode()).hexdigest()
 
 
 # 某个参数类的参数空间
@@ -302,10 +318,6 @@ class ConfigSpace(object):
             else:
                 break
 
-        print(f"key = {key}")
-
-        print(f"self.flat_params = {self.flat_params}")
-
         # deepcopy 一份 config
         new_config = config.copy()
 
@@ -323,7 +335,6 @@ class ConfigSpace(object):
 
             # 如果选的值和原来的值不一样，就赋值
             if getattr(cur, last_key).get_index() != value.get_index():
-                print(f"Change {key} from {getattr(cur, last_key)} to {value}")
                 setattr(cur, last_key, value)
                 break
             else:

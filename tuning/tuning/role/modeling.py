@@ -72,7 +72,7 @@ class Modeling:
             path (Path, optional): 将要存储的路径. Defaults to RECORD_PATH.
         """
         with open(path, "w") as f:
-            json.dump([[x.get_flat_dict(), y] for x, y in zip(self.xs, self.ys)], f)
+            json.dump([[x.get_value_dict(), y] for x, y in zip(self.xs, self.ys)], f)
 
         logger.info(f"Dumped {len(self.ys)} records to file.")
 

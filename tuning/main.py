@@ -19,6 +19,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    if args.clear is True:
+        logger.info("Clear the tuning result and start from scratch")
+        # remove all files in build_tuning and tuning_results folder
+        import os
+
+        command = f"rm -rf {TUNING_PATH} {BUILD_PATH}"
+        os.system(command)
+        logger.info("Clear previous results, done.")
+
     # create context
     model = Modeling(Config)
     manip = Manipulator(model)
@@ -29,9 +38,10 @@ if __name__ == "__main__":
     )
 
     mode: str = args.run_mode
+
     if mode == "tune":
+
         best_pair = tuner.tune()
-        # best_config = tuner.manipulator.find_maximums(5, 50, 1)
         logger.info(
             f"Best configuration: {best_pair[0]}, estimated time cost: {best_pair[1]:.2f}s"
         )

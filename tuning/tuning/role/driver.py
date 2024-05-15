@@ -27,7 +27,7 @@ class Driver:
         if not os.path.exists(build_path):
             os.makedirs(build_path)
         with open(get_config_path(config_hash), "w") as f:
-            f.write(json.dumps(config.get_flat_dict()))
+            f.write(json.dumps(config.get_value_dict()))
 
         os.chdir(build_path)
 
@@ -39,13 +39,13 @@ class Driver:
             f"Generating makefile with CMake: {cmake_command} for config {config}"
         )
         # without stdout
-        ret_code = os.system(cmake_command + " > /dev/null 2>&1")
+        ret_code = os.system(cmake_command + f" > {build_path / 'cmake.log'} 2>&1")
 
         assert ret_code == 0, f"CMake exited with non-zero code {ret_code}"
 
         make_command = "make -j"
         logger.info(f"Compiling with Make: {make_command} for config {config}")
-        ret_code = os.system(make_command + " > /dev/null 2>&1")
+        ret_code = os.system(make_command + f" > {build_path / 'make.log'} 2>&1")
         assert ret_code == 0, f"Make exited with non-zero code {ret_code}"
 
         logger.debug("Compilation finished")

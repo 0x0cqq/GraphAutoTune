@@ -48,24 +48,33 @@ class Manipulator:
 
         self.model.update_list(inputs, results)
 
-        possible_vals: List[float] = []
-        for tmp in self.config_space.config_space():
-            tmp_val = self.model.predict(tmp)
-            if tmp_val not in possible_vals:
-                possible_vals.append(tmp_val)
-        logger.info(f"After update, possible values: {possible_vals}")
+    def random_batch(self, batch_size: int) -> List[ConfigClass]:
+        """随机生成一批参数
 
-    def find_maximums(
-        self, num: int, n_iter: int, log_interval: int
-    ) -> List[ConfigClass]:
+        Args:
+            batch_size (int): 参数个数
+
+        Returns:
+            List[ConfigClass]: 参数列表
         """
-        Find the best `num` sets of parameters
+        return self.config_space.random_configurations(batch_size)
+
+    def next_batch(
+        self, batch_size: int, n_iter: int = 40, log_interval: int = -1
+    ) -> List[ConfigClass]:
+        """找到下一批最优的参数
+
+        Args:
+            batch_size (int): 一次找到的最优参数个数
+            n_iter (int): 模拟退火的迭代次数
+            log_interval (int): 日志输出间隔
+
+        Returns:
+            List[ConfigClass]: 下一批最优的参数
         """
 
         class Pair:
-            """
-            class for heapifying tuple[float, dict]
-            """
+            """为了 heapify (float, ConfigClass)"""
 
             def __init__(self, a: float, b: ConfigClass) -> None:
                 self.first = a
@@ -81,11 +90,11 @@ class Manipulator:
         start = time.time()
         temp = 0.1
 
-        points = [self.config_space.random_configuration() for _ in range(num)]
+        points = [self.config_space.random_configuration() for _ in range(batch_size)]
 
         scores = self.model.predict_list(points)
 
-        heap_items = [Pair(scores[i], points[i]) for i in range(num)]
+        heap_items = [Pair(scores[i], points[i]) for i in range(batch_size)]
         heapq.heapify(heap_items)
         in_heap = [x.second for x in heap_items]
 
@@ -111,7 +120,7 @@ class Manipulator:
 
             end = time.time()
 
-            if log_interval and _ % log_interval == 0:
+            if log_interval != -1 and _ % log_interval == 0:
                 logger.info(
                     f"\rFinding maximums... {((_+1) / n_iter):.2f}%, time elapsed: {(end - start):.2f}s, temp: {temp:.2f}, max: {heap_items[0].first}",
                 )
