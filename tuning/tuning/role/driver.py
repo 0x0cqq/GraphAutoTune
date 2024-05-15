@@ -1,22 +1,42 @@
 import json
 import logging
 import os
-from typing import List
+from typing import List, Type
 
 from ..common.const import *
-from ..config.details import Config
+from ..config.base import ConfigClass
 
 logger = logging.getLogger("driver")
 
 
 class Driver:
-    @staticmethod
-    def compile(config: Config):
+    def __init__(
+        self, config_class: Type[ConfigClass], job: str, options: List[str]
+    ) -> None:
+        """创建一个 Driver
+
+        Args:
+            job (str): 可执行文件的地址
+            options (List[str]): 可执行文件的参数
+        """
+
+        self.job = job
+        self.options = options
+        self.config_class = config_class
+
+    def _check_config(self, config: ConfigClass) -> None:
+        assert isinstance(
+            config, self.config_class
+        ), f"Config should be {self.config_class} type, got {type(config)}"
+
+    def compile(self, config: ConfigClass):
         """根据Config生成可执行文件
 
         Args:
             config (Config): 配置 config 对象
         """
+
+        self._check_config(config)
 
         definitions = ""
 
@@ -50,14 +70,15 @@ class Driver:
 
         logger.debug("Compilation finished")
 
-    @staticmethod
-    def run(job: str, options: List[str], config: Config) -> float:
+    def run(self, config: ConfigClass) -> float:
         """
         根据 Config 运行程序
 
         Returns:
             float: 时间
         """
+
+        self._check_config(config)
 
         if not os.path.exists(TUNING_PATH):
             os.makedirs(TUNING_PATH)
@@ -66,15 +87,15 @@ class Driver:
         if not os.path.exists(TUNING_PATH / config_hash):
             os.makedirs(TUNING_PATH / config_hash)
 
-        options = options + [config_hash]
+        options = self.options + [config_hash]
 
         build_path = BUILD_PATH / config_hash
-        Driver.compile(config)
+        self.compile(config)
         os.chdir(build_path)
 
-        logger.info(f"Running Job: <{job}> with options: <{options}>")
+        logger.info(f"Running Job: <{self.job}> with options: <{options}>")
 
-        run_command = f"{RUN_COMMAND_PREFIX} ./{job} {' '.join(options)}"
+        run_command = f"{RUN_COMMAND_PREFIX} ./{self.job} {' '.join(options)}"
         logger.debug(f"Running Command: {run_command}")
         result_path = get_result_path(config_hash)
         ret_code = os.system(run_command + f" > {result_path.as_posix()} 2>&1")

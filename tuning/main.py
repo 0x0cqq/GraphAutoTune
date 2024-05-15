@@ -4,6 +4,7 @@ import logging
 from tuning.common.argparser import parser
 from tuning.common.const import *
 from tuning.config.details import Config
+from tuning.role.driver import Driver
 from tuning.role.manipulator import Manipulator
 from tuning.role.modeling import Modeling
 from tuning.role.tuner import Tuner
@@ -30,12 +31,9 @@ if __name__ == "__main__":
 
     # create context
     model = Modeling(Config)
-    manip = Manipulator(model)
-    tuner = Tuner(
-        JOB_NAME,
-        [args.data, args.pattern],
-        manip,
-    )
+    driver = Driver(Config, JOB_NAME, [args.data, args.pattern])
+    manip = Manipulator(model, driver)
+    tuner = Tuner(manip)
 
     mode: str = args.run_mode
 

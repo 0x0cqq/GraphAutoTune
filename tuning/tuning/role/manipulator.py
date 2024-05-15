@@ -1,12 +1,13 @@
 import heapq
 import logging
 import time
-from typing import List, TypeVar
+from typing import List, Tuple
 
 import numpy as np
 
 from ..common.const import *
 from ..config.base import ConfigClass, ConfigSpace
+from .driver import Driver
 from .modeling import Modeling
 
 logger = logging.getLogger("manipulator")
@@ -15,18 +16,20 @@ logger = logging.getLogger("manipulator")
 
 
 class Manipulator:
-    def __init__(self, model: Modeling):
+    def __init__(self, model: Modeling, driver: Driver):
         """构造 Manipulator
 
         Args:
             model (Modeling): 代价模型
+            driver (Driver): 运行程序的驱动器
         """
         self.model = model
+        self.driver = driver
         self.config_space = ConfigSpace(model.config_class)
         self.best_config = (None, FLOAT_INF)
         self.batch_size = 10
 
-    def update(self, inputs: List[ConfigClass], results: List[float]) -> None:
+    def update_model(self, inputs: List[ConfigClass], results: List[float]) -> None:
         """添加若干的结果到代价模型中
 
         Args:
@@ -128,3 +131,23 @@ class Manipulator:
         logger.info("Finished finding maximums.")
 
         return [x.second for x in heap_items]
+
+    def run_batch(
+        self, trials: List[ConfigClass]
+    ) -> Tuple[List[ConfigClass], List[float]]:
+        """测试一批参数的实际运行效率
+
+        Args:
+            trials (List[ConfigClass]): 参数空间中的点
+
+        Returns:
+            Tuple[List[ConfigClass], List[float]]: 有效的参数点和对应的运行效率
+        """
+        valid_trials = []
+        results = []
+        for trial in trials:
+            time_cost = self.driver.run(trial)
+            if time_cost != FLOAT_INF:
+                valid_trials.append(trial)
+                results.append(time_cost)
+        return valid_trials, results
