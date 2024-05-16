@@ -13,6 +13,7 @@
 #include "consts/general_consts.hpp"
 #include "core/types.hpp"
 #include "core/unordered_vertex_set.cuh"
+#include "utils/cuda_utils.cuh"
 
 namespace cg = cooperative_groups;
 
@@ -157,6 +158,11 @@ __device__ VIndex_t do_intersection_parallel(
     const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
     __shared__ VIndex_t block_out_size[WARPS_PER_BLOCK];
 
+    if (na > nb) {
+        swap(na, nb);
+        swap(a, b);
+    }
+
     const int wid = warp.meta_group_rank();  // warp id
     const int lid = warp.thread_rank();      // lane id
     VIndex_t& out_size = block_out_size[wid];
@@ -232,6 +238,12 @@ inline __device__ VIndex_t do_intersection_parallel_size(
     const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     const VIndex_t* a, const VIndex_t* b, VIndex_t na, VIndex_t nb,
     const Core::UnorderedVertexSet<SIZE>& set) {
+    // na 应该是元素个数比较小的那个
+    if (na > nb) {
+        swap(na, nb);
+        swap(a, b);
+    }
+
     int lid = warp.thread_rank();
 
     VIndex_t out_size = 0;

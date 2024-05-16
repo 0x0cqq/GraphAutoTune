@@ -1,6 +1,6 @@
 #pragma once
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -68,4 +68,11 @@ __device__ int lower_bound(const T *loop_data_ptr, int loop_size,
             r = mid - 1;
     }
     return l;
+}
+
+template <typename T>
+__device__ void swap(T &a, T &b) {
+    T tmp = a;
+    a = b;
+    b = tmp;
 }
