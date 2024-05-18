@@ -227,7 +227,8 @@ __device__ VIndex_t do_intersection_serial_size(
     bool found = false;
     for (int num_done = 0; num_done < na; num_done++) {
         u = a[num_done];
-        found = search_dispatcher<config>(u, b, nb) & !set.has_data<depth>(u);
+        found =
+            search_dispatcher<config>(u, b, nb) & !set.has_data<depth>(warp, u);
         if (found) out_size++;
     }
     return out_size;

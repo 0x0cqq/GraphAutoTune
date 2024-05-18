@@ -236,7 +236,8 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
         VertexSet &new_vertex_set = new_vertex_sets[warp_id];
         new_vertex_set.init(warp, neighbors, neighbors_cnt);
 
-        bool appeared = cur_subtraction_set.has_data<cur_pattern_vid + 1>(v);
+        bool appeared =
+            cur_subtraction_set.has_data<cur_pattern_vid + 1>(warp, v);
         // 构建所有 prefix 对应的 p_storage
 #pragma unroll
         for (int cur_prefix_id = start_prefix_id; cur_prefix_id < end_prefix_id;

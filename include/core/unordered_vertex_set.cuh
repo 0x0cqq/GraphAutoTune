@@ -25,9 +25,15 @@ class UnorderedVertexSet {
 
     __device__ VIndex_t get(int pos) const { return _data[pos]; }
 
-    __device__ void copy(const UnorderedVertexSet<SIZE>& other) {
-        const int lid = threadIdx.x % THREADS_PER_WARP;
-        if (lid < SIZE) _data[lid] = other._data[lid];
+    template <unsigned int WarpSize>
+    __device__ void copy(
+        const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
+        const UnorderedVertexSet<SIZE>& other) {
+        const int lid = warp.thread_rank();
+#pragma unroll
+        for (int i = lid; i < SIZE; i += WarpSize) {
+            _data[i] = other._data[i];
+        }
     }
 
     __device__ void copy_single_thread(const UnorderedVertexSet<SIZE>& other) {
@@ -37,11 +43,18 @@ class UnorderedVertexSet {
         }
     }
 
-    template <int N>
-    __device__ bool has_data(VIndex_t val) const {
-        const int lid = threadIdx.x % THREADS_PER_WARP;
-        bool result = (lid < N) && (_data[lid] == val);
-        return __any_sync(0xFFFFFFFF, result);
+    template <int N, unsigned int WarpSize>
+    __device__ bool has_data(
+        const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
+        VIndex_t val) const {
+        const int lid = warp.thread_rank();
+
+        bool result = false;
+#pragma unroll
+        for (int i = lid; i < N; i += WarpSize) {
+            result |= (_data[i] == val);
+        }
+        return warp.any(result); 
     }
 
     template <int N>
