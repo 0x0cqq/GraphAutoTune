@@ -119,8 +119,17 @@ class GlobalMemoryGraph {
 
     __host__ __device__ inline VIndex_t v_cnt() const { return this->_v_cnt; }
     __host__ __device__ inline EIndex_t e_cnt() const { return this->_e_cnt; }
-    __host__ __device__ inline EIndex_t *vertexes() const { return this->_vertexes; }
+    __host__ __device__ inline EIndex_t *vertexes() const {
+        return this->_vertexes;
+    }
     __host__ __device__ inline VIndex_t *edges() const { return this->_edges; }
+    __host__ __device__ inline VIndex_t max_degree() const {
+        VIndex_t ans = 0;
+        for (int i = 0; i < v_cnt(); i++) {
+            ans = max(ans, get_neigh_cnt(i));
+        }
+        return ans;
+    }
     __host__ __device__ inline VIndex_t *get_neigh(VIndex_t v) const {
         return _edges + _vertexes[v];
     }
@@ -140,6 +149,7 @@ class GlobalMemoryGraph {
     __host__ void output() const {
         std::cout << "Vertex Count: " << v_cnt() << std::endl;
         std::cout << "Edge Count: " << e_cnt() << std::endl;
+        std::cout << "Max Degree: " << max_degree() << std::endl;
     }
 
     __host__ GlobalMemoryGraph(std::ifstream &file, bool binary) {
