@@ -68,6 +68,7 @@ int main(int argc, char* argv[]) {
     // 图后端
     Infra::GlobalMemoryGraph<default_config> graph{graph_file, true};
     graph.output();
+    int set_size = graph.max_degree();
 
     // 设备上下文
     Engine::DeviceContext<default_config> context{schedule, graph};
@@ -77,7 +78,7 @@ int main(int argc, char* argv[]) {
     context.to_device();
 
     // 2. 构建 Engine
-    Engine::Executor<default_config> engine{GPU_DEVICE};
+    Engine::Executor<default_config> engine{set_size, GPU_DEVICE};
     std::cout << "Size of Executor: " << sizeof(engine) << " Bytes"
               << std::endl;
 

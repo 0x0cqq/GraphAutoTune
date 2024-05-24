@@ -20,18 +20,16 @@ namespace Engine {
 
 // space 是单独开的，需要再分给 vertex set 里面的 pointer
 template <Config config>
-__global__ void set_vertex_set_space_kernel(PrefixStorage<config> p_storage) {
-    constexpr int NUMS_UNIT = config.engine_config.nums_unit;
-    constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
-
+__global__ void set_vertex_set_space_kernel(PrefixStorage<config> p_storage,
+                                            int num_units, int set_size) {
     auto grid = cg::this_grid();
 
     const int global_tid = grid.thread_rank();
     const int num_threads = grid.num_threads();
 
-    for (int uid = global_tid; uid < NUMS_UNIT; uid += num_threads) {
-        p_storage.vertex_set[uid].init_empty(
-            p_storage.space + uid * MAX_SET_SIZE, MAX_SET_SIZE);
+    for (int uid = global_tid; uid < num_units; uid += num_threads) {
+        p_storage.vertex_set[uid].init_empty(p_storage.space + uid * set_size,
+                                             set_size);
     }
 }
 
@@ -236,8 +234,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
         VertexSet &new_vertex_set = new_vertex_sets[warp_id];
         new_vertex_set.init(warp, neighbors, neighbors_cnt);
 
-        bool appeared =
-            cur_subtraction_set.has_data<cur_pattern_vid + 1>(warp, v);
+        bool ap = cur_subtraction_set.has_data<cur_pattern_vid + 1>(warp, v);
         // 构建所有 prefix 对应的 p_storage
 #pragma unroll
         for (int cur_prefix_id = start_prefix_id; cur_prefix_id < end_prefix_id;
@@ -250,7 +247,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
             // 找到下一层的 Storage Unit
             auto &next_vertex_set = shared_vertex_set[index][next_extend_uid];
 
-            if (appeared) {
+            if (ap) {
                 next_vertex_set.clear();
                 continue;
             }
@@ -450,9 +447,10 @@ void get_iep_answer(DeviceContext<config> &context,
 }
 
 template <Config config>
-void set_vertex_set_space(const PrefixStorage<config> &p_storage) {
+void set_vertex_set_space(const PrefixStorage<config> &p_storage, int num_units,
+                          int set_size) {
     set_vertex_set_space_kernel<config>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(p_storage);
+        <<<num_blocks, THREADS_PER_BLOCK>>>(p_storage, num_units, set_size);
 }
 
 template <Config config>

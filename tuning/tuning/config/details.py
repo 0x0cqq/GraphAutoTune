@@ -5,10 +5,12 @@ from .base import ConfigClass, EnumParam, IntegerParam, ParamClass
 
 # 这里是和 C++ 的实现一一对应的
 
+INT_MAX = 2**31 - 1
 
-class SetSearchType(EnumParam):
-    values = ["Binary", "Linear"]
-    default_value = "Binary"
+
+class SetSearchType(IntegerParam):
+    values = [0, 2, 4, 8, 16, 32, 64, INT_MAX]
+    default_value = [0]
 
 
 class SetIntersectionType(EnumParam):
@@ -40,21 +42,8 @@ class InfraConfig(ConfigClass):
     }
 
 
-class MaxSetSize(IntegerParam):
-    values = [5000, 10000]
-    default_value = 5000
-
-
-class NumUnits(IntegerParam):
-    values = [5000, 10000, 20000, 50000]
-    default_value = 10000
-
-
 class EngineConfig(ConfigClass):
-    params = {
-        "max_set_size": MaxSetSize,
-        "nums_unit": NumUnits,
-    }
+    params = {}
 
 
 class Config(ConfigClass):

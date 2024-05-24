@@ -144,10 +144,16 @@ __device__ bool linear_search(const VIndex_t u, const VIndex_t* b,
 
 template <Config config>
 __device__ bool search_dispatcher(VIndex_t u, const VIndex_t* b, VIndex_t nb) {
-    if constexpr (config.vertex_set_config.set_search_type == Binary) {
+    if constexpr (config.vertex_set_config.set_search_type == 0) {
         return binary_search(u, b, nb);
-    } else {
+    } else if constexpr (config.vertex_set_config.set_search_type == INT_MAX) {
         return linear_search(u, b, nb);
+    } else {
+        if (nb < config.vertex_set_config.set_search_type) {
+            return linear_search(u, b, nb);
+        } else {
+            return binary_search(u, b, nb);
+        }
     }
 }
 

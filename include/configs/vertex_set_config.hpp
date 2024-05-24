@@ -10,13 +10,10 @@ enum SetIntersectionType {
     Serial,
 };
 
-enum SetSearchType {
-    Binary,
-    Linear,
-};
-
 struct VertexSetConfig {
-    SetSearchType set_search_type = Binary;
+    // Search Type 从 Linear 转向 Binary 的 Bar。
+    // 特殊情况：0 是全 Binary, INT_MAX 是全 Linear
+    int set_search_type = 0;
     SetIntersectionType set_intersection_type = Parallel;
     VertexStoreType vertex_store_type = Array;
 };

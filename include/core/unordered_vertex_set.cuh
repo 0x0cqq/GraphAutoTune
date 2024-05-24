@@ -54,7 +54,7 @@ class UnorderedVertexSet {
         for (int i = lid; i < N; i += WarpSize) {
             result |= (_data[i] == val);
         }
-        return warp.any(result); 
+        return warp.any(result);
     }
 
     template <int N>

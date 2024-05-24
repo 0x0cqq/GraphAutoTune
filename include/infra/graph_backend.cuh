@@ -125,7 +125,7 @@ class GlobalMemoryGraph {
     __host__ __device__ inline VIndex_t *edges() const { return this->_edges; }
     __host__ __device__ inline VIndex_t max_degree() const {
         VIndex_t ans = 0;
-        for (int i = 0; i < v_cnt(); i++) {
+        for (VIndex_t i = 0; i < v_cnt(); i++) {
             ans = max(ans, get_neigh_cnt(i));
         }
         return ans;

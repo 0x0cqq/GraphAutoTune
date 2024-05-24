@@ -25,8 +25,6 @@ template <Config config>
 class Executor {
   private:
     using VertexSet = VertexSetTypeDispatcher<config>::type;
-    static constexpr int NUMS_UNIT = config.engine_config.nums_unit;
-    static constexpr int MAX_SET_SIZE = config.engine_config.max_set_size;
     DeviceType _device_type;
 
     // 搜索过程中每层所需要的临时存储。
@@ -47,7 +45,7 @@ class Executor {
     __host__ void search();
 
     template <int cur_pattern_vid>
-    __host__ void prepare(VIndex_t &extend_total_units);
+    __host__ void prepare(VIndex_t &extend_total_units, VIndex_t &extend_nums);
 
     template <int cur_pattern_vid>
     __host__ void extend(int base_extend_unit_id, int num_extend_units);
@@ -56,31 +54,46 @@ class Executor {
     __host__ void final_step();
 
   public:
-    __host__ Executor(DeviceType device_type)
+    __host__ Executor(int set_size, DeviceType device_type)
         : _device_type(device_type), device_context(nullptr) {
 #ifndef NDEBUG
         std::cout << "Executor: Constructor, device type: "
                   << (device_type == GPU_DEVICE ? "GPU" : "CPU") << std::endl;
 #endif
 
+        // 一共有 MAX_PREFIXS 层前缀，每一层都有一个 prefix storage
+        // 基本上内存就是 MAX_PREFIXS * max_units * (set_size +
+        // 可以忽略不计，留个 20 * 8 bytes 用即可）
+
+        // max_units = Memory / (MAX_PREFIXS * (set_size * sizeof(VIndex_t) + 20
+        // * 8)
+
+        // 获取Free Memory
+        size_t free, total;
+        gpuErrchk(cudaMemGetInfo(&free, &total));
+        size_t max_units = free / (MAX_PREFIXS * (set_size * sizeof(VIndex_t) +
+                                                  20 * 8));  // 20 * 8 bytes
+        std::cerr << "Max Units: " << max_units << std::endl;
+
         for (int i = 0; i < MAX_PREFIXS; i++) {
-            prefix_storages[i].init();
+            prefix_storages[i].init(max_units, set_size);
             // 给 prefix storage 里面的 vertex set 分配内存空间
-            set_vertex_set_space<config>(prefix_storages[i]);
+            set_vertex_set_space<config>(prefix_storages[i], max_units,
+                                         set_size);
         }
         for (int i = 0; i < MAX_VERTEXES; i++) {
-            vertex_storages[i].init();
+            vertex_storages[i].init(max_units);
         }
 
         // 分配答案空间
-        gpuErrchk(cudaMalloc(&d_ans, sizeof(unsigned long long) * NUMS_UNIT));
+        gpuErrchk(cudaMalloc(&d_ans, sizeof(unsigned long long) * max_units));
         // 设备空间设置为 0
-        gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * NUMS_UNIT));
+        gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * max_units));
 
         // 准备前缀和空间
         VIndex_t *temp = nullptr;
         gpuErrchk(cub::DeviceScan::InclusiveSum(
-            d_prefix_temp_storage, temp_storage_bytes, temp, temp, NUMS_UNIT));
+            d_prefix_temp_storage, temp_storage_bytes, temp, temp, max_units));
         gpuErrchk(cudaMalloc(&d_prefix_temp_storage, temp_storage_bytes));
 
         gpuErrchk(cudaDeviceSynchronize());
@@ -108,9 +121,9 @@ class Executor {
     }
 
     // 通过 thrust::reduce 求和所有的 Unit 的 d_ans
-    __host__ unsigned long long reduce_answer() {
+    __host__ unsigned long long reduce_answer(VIndex_t units) {
         thrust::device_ptr<unsigned long long> ans_ptr(d_ans);
-        return thrust::reduce(ans_ptr, ans_ptr + NUMS_UNIT);
+        return thrust::reduce(ans_ptr, ans_ptr + units);
     }
 
     __host__ unsigned long long perform_search(DeviceContext<config> &context);
@@ -123,14 +136,17 @@ __host__ unsigned long long Executor<config>::perform_search(
     // 把 Context 到当前的 Executor
     this->set_context(context);
 
+    int last_vertex = device_context->schedule_data.basic_vertexes - 1;
+    int num_units = vertex_storages[last_vertex].max_units;
+
     // 设备空间设置为0
     // 按理说这个应该放到外面。但总共也就一次，所以就放在这里了
-    gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * NUMS_UNIT));
+    gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * num_units));
 
     VIndex_t v_cnt = device_context->graph_backend.v_cnt();
-    for (VIndex_t base_index = 0; base_index < v_cnt; base_index += NUMS_UNIT) {
+    for (VIndex_t base_index = 0; base_index < v_cnt; base_index += num_units) {
         VIndex_t start_vid = base_index,
-                 end_vid = std::min(v_cnt, base_index + NUMS_UNIT);
+                 end_vid = std::min(v_cnt, base_index + num_units);
 #ifndef NDEBUG
         std::cout << "First Extend Kernel, start: " << start_vid
                   << ", end: " << end_vid << std::endl;
@@ -146,7 +162,7 @@ __host__ unsigned long long Executor<config>::perform_search(
     }
 
     // 从 d_ans 里面把答案取出来
-    return reduce_answer();
+    return reduce_answer(num_units);
 }
 
 template <Config config>
@@ -172,8 +188,8 @@ __host__ void Executor<config>::search() {
     if constexpr (cur_pattern_vid + 1 < MAX_VERTEXES) {
         // 构建 v_storages[cur_pattern_vid] 的 unit_extend_size & sum
         // 也就是向 cur_pattern_vid + 1 扩展的前置工作
-        VIndex_t extend_total_units = 0;
-        prepare<cur_pattern_vid>(extend_total_units);
+        VIndex_t extend_total_units = 0, extend_nums = 0;
+        prepare<cur_pattern_vid>(extend_total_units, extend_nums);
 
         // 等待下一回合的结果被拷贝回来
         gpuErrchk(cudaStreamSynchronize(0));
@@ -182,8 +198,8 @@ __host__ void Executor<config>::search() {
         // std::endl;
 
         // 直到本层全部被拓展完完成
-        for (int base = 0; base < extend_total_units; base += NUMS_UNIT) {
-            int num = min(extend_total_units - base, NUMS_UNIT);
+        for (int base = 0; base < extend_total_units; base += extend_nums) {
+            int num = min(extend_total_units - base, extend_nums);
 
             // std::cout << "Base: " << base << ", Num: " << num << std::endl;
 
@@ -206,7 +222,8 @@ __host__ void Executor<config>::search() {
 // 这个函数构建 cur_pattern_vid 位置的 unit_extend_size & sum
 template <Config config>
 template <int cur_pattern_vid>
-__host__ void Executor<config>::prepare(VIndex_t &extend_total_units) {
+__host__ void Executor<config>::prepare(VIndex_t &extend_total_units,
+                                        VIndex_t &extend_nums) {
 #ifndef NDEBUG
     auto start = std::chrono::high_resolution_clock::now();
     if (cur_pattern_vid < LOG_DEPTH) {
@@ -221,6 +238,9 @@ __host__ void Executor<config>::prepare(VIndex_t &extend_total_units) {
                                                vertex_storages);
 
     auto &v_storage = vertex_storages[cur_pattern_vid];
+
+    auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
+    extend_nums = next_v_storage.max_units;
 
     // 这个函数构建 cur_pattern_vid 位置的 unit_extend_sum
     gpuErrchk(cub::DeviceScan::InclusiveSum(
