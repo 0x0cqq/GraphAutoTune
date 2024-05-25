@@ -162,7 +162,11 @@ __device__ VIndex_t do_intersection_parallel(
     const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
     const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
-    __shared__ VIndex_t block_out_size[WARPS_PER_BLOCK];
+        constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int warps_per_block =
+        launch_config.threads_per_block / launch_config.threads_per_warp;
+
+    __shared__ VIndex_t block_out_size[warps_per_block];
 
     if (na > nb) {
         swap(na, nb);

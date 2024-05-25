@@ -42,8 +42,39 @@ class InfraConfig(ConfigClass):
     }
 
 
+class NumBlocks(IntegerParam):
+    values = [128, 256, 512, 1024]
+    default_value = 512
+
+
+class ThreadsPerBlock(IntegerParam):
+    values = [64, 128, 256]
+    default_value = 128
+
+
+class ThreadsPerWarp(IntegerParam):
+    values = [1, 4, 16, 32]
+    default_value = 32
+
+
+class MaxRegs(IntegerParam):
+    values = [32, 48, 64, 80, 96]
+    default_value = 64
+
+
+class LaunchConfig(ConfigClass):
+    params = {
+        "num_blocks": NumBlocks,
+        "threads_per_block": ThreadsPerBlock,
+        "threads_per_warp": ThreadsPerWarp,
+        "max_regs": MaxRegs,
+    }
+
+
 class EngineConfig(ConfigClass):
-    params = {}
+    params = {
+        "launch_config": LaunchConfig,
+    }
 
 
 class Config(ConfigClass):

@@ -3,10 +3,7 @@
 
 #include <array>
 
-#include "configs/launch_config.hpp"
 #include "core/types.hpp"
-
-using namespace LaunchConfig;
 
 namespace cg = cooperative_groups;
 

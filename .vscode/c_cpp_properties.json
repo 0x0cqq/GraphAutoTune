@@ -5,11 +5,11 @@
             "intelliSenseMode": "linux-gcc-x64",
             "includePath": [
                 "${workspaceFolder}/include/**",
-                "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/include",
+                "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.4.0-woezhmu2hm72hwy7v3ikdnm23t6pg26f/include",
                 "${workspaceFolder}/build/_deps/catch2-src/src",
                 "${workspaceFolder}/build/_deps/catch2-build/generated-includes"
             ],
-            "compilerPath": "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.1.1-cshnr5fs3ddy34kuvgewyzie75nnmmpz/bin/nvcc",
+            "compilerPath": "/home/cqq/spack/opt/spack/linux-debian12-cascadelake/gcc-12.2.0/cuda-12.4.0-woezhmu2hm72hwy7v3ikdnm23t6pg26f/bin/nvcc",
             "cStandard": "c17",
             "cppStandard": "c++20"
         }

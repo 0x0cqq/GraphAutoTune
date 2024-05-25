@@ -41,30 +41,32 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-restrict")
 # Set Include Directories
 include_directories(include)
 
+if(ENABLE_TEST)
 
 # Fetch Catch2 for testing
 message(STATUS "Fetching Catch2...")
+  Include(FetchContent)
+  FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY git@github.com:catchorg/Catch2.git
+    GIT_TAG        v3.5.2
+  )
+  FetchContent_MakeAvailable(Catch2)
+  message(STATUS "Catch2 source dir: ${catch2_SOURCE_DIR}")
 
-Include(FetchContent)
-FetchContent_Declare(
-  Catch2
-  GIT_REPOSITORY git@github.com:catchorg/Catch2.git
-  GIT_TAG        v3.5.2
-)
-FetchContent_MakeAvailable(Catch2)
-message(STATUS "Catch2 source dir: ${catch2_SOURCE_DIR}")
+  list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+  include(CTest)
+  include(Catch)
+  # Tests
+  add_subdirectory(tests)
+endif()
 
-list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
-include(CTest)
-include(Catch)
 
 # Target: pattern_matching
 add_subdirectory(target)
-# Tests
-add_subdirectory(tests)
+
 # Utils: transform graph e.g.
 add_subdirectory(utils)
-
 
 # message the current parameters
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")

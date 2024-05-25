@@ -2,11 +2,8 @@
 
 #include <cooperative_groups.h>
 
-#include "configs/launch_config.hpp"
 #include "engine/context.cuh"
 #include "engine/storage.cuh"
-
-using namespace LaunchConfig;
 
 namespace cg = cooperative_groups;
 
@@ -170,17 +167,21 @@ __global__ void extend_v_storage_kernel(const DeviceContext<config> context,
 // 设置 v_storage[cur_pattern_vid] 的 prev_uid, subtraction_set
 // 设置 p_storage[(cur_pattern_vid + 1) --> prefix_id] 的 vertex_set
 template <Config config, int cur_pattern_vid>
-__global__ void extend_p_storage_kernel(const DeviceContext<config> context,
-                                        PrefixStorages<config> p_storages,
-                                        VertexStorage<config> cur_v_storage,
-                                        VertexStorage<config> next_v_storage,
-                                        int num_extend_units) {
+__global__ void __maxnreg__(config.engine_config.launch_config.max_regs)
+    extend_p_storage_kernel(const DeviceContext<config> context,
+                            PrefixStorages<config> p_storages,
+                            VertexStorage<config> cur_v_storage,
+                            VertexStorage<config> next_v_storage,
+                            int num_extend_units) {
     using VertexSet = VertexSetTypeDispatcher<config>::type;
-    __shared__ VertexSet new_vertex_sets[WARPS_PER_BLOCK];
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int warps_per_block =
+        launch_config.threads_per_block / launch_config.threads_per_warp;
+    __shared__ VertexSet new_vertex_sets[warps_per_block];
 
     auto grid = cg::this_grid();
     auto block = cg::this_thread_block();
-    auto warp = cg::tiled_partition<THREADS_PER_WARP>(block);
+    auto warp = cg::tiled_partition<launch_config.threads_per_warp>(block);
 
     // 下一个点的 loop_set_prefix_id
     const int loop_set_prefix_id =
@@ -214,6 +215,7 @@ __global__ void extend_p_storage_kernel(const DeviceContext<config> context,
     const int warp_id = warp.meta_group_rank();
     const int global_wid =
         block.group_index().x * warp.meta_group_size() + warp_id;
+    const int num_total_warps = grid.dim_blocks().x * warp.meta_group_size();
 
     for (int base = 0; base < num_extend_units; base += num_total_warps) {
         int next_extend_uid = base + global_wid;
@@ -396,8 +398,12 @@ void prepare_v_storage(DeviceContext<config> &context,
         context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
     const auto &p_storage = prefix_storages[loop_set_prefix_id];
 
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int num_blocks = launch_config.num_blocks;
+    constexpr int threads_per_block = launch_config.threads_per_block;
+
     prepare_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, p_storage, v_storage,
+        <<<num_blocks, threads_per_block>>>(context, p_storage, v_storage,
                                             loop_set_prefix_id);
 }
 
@@ -414,8 +420,12 @@ void extend_v_storage(const DeviceContext<config> context,
         context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
     const auto &loop_set_storage = p_storages[loop_set_prefix_id];
 
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int num_blocks = launch_config.num_blocks;
+    constexpr int threads_per_block = launch_config.threads_per_block;
+
     extend_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(
+        <<<num_blocks, threads_per_block>>>(
             context, loop_set_storage, loop_set_prefix_id, cur_v_storage,
             next_v_storage, base_extend_unit_id, num_extend_units);
 }
@@ -428,8 +438,12 @@ void extend_p_storage(DeviceContext<config> &context,
     const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
     const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
 
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int num_blocks = launch_config.num_blocks;
+    constexpr int threads_per_block = launch_config.threads_per_block;
+
     extend_p_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
+        <<<num_blocks, threads_per_block>>>(context, prefix_storages,
                                             cur_v_storage, next_v_storage,
                                             num_extend_units);
 }
@@ -441,16 +455,24 @@ void get_iep_answer(DeviceContext<config> &context,
                     unsigned long long *d_ans) {
     const auto &last_v_storage = vertex_storages[cur_pattern_vid];
 
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int num_blocks = launch_config.num_blocks;
+    constexpr int threads_per_block = launch_config.threads_per_block;
+
     get_iep_answer_kernel<config, cur_pattern_vid>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(context, prefix_storages,
+        <<<num_blocks, threads_per_block>>>(context, prefix_storages,
                                             last_v_storage, d_ans);
 }
 
 template <Config config>
 void set_vertex_set_space(const PrefixStorage<config> &p_storage, int num_units,
                           int set_size) {
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int num_blocks = launch_config.num_blocks;
+    constexpr int threads_per_block = launch_config.threads_per_block;
+
     set_vertex_set_space_kernel<config>
-        <<<num_blocks, THREADS_PER_BLOCK>>>(p_storage, num_units, set_size);
+        <<<num_blocks, threads_per_block>>>(p_storage, num_units, set_size);
 }
 
 template <Config config>
@@ -458,7 +480,11 @@ void first_extend(DeviceContext<config> &context,
                   const PrefixStorage<config> &p_storage,
                   const VertexStorage<config> &v_storage, VIndex_t start_vid,
                   VIndex_t end_vid) {
-    first_extend_kernel<config><<<num_blocks, THREADS_PER_BLOCK>>>(
+    constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr int num_blocks = launch_config.num_blocks;
+    constexpr int threads_per_block = launch_config.threads_per_block;
+
+    first_extend_kernel<config><<<num_blocks, threads_per_block>>>(
         context, p_storage, v_storage, start_vid, end_vid);
 }
 
