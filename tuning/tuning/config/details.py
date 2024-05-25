@@ -9,7 +9,7 @@ INT_MAX = 2**31 - 1
 
 
 class SetSearchType(IntegerParam):
-    values = [0, 2, 4, 8, 16, 32, 64, INT_MAX]
+    values = [0, 4, 16, 64, INT_MAX]
     default_value = [0]
 
 
@@ -43,7 +43,7 @@ class InfraConfig(ConfigClass):
 
 
 class NumBlocks(IntegerParam):
-    values = [128, 256, 512, 1024]
+    values = [256, 512, 1024]
     default_value = 512
 
 
@@ -58,7 +58,7 @@ class ThreadsPerWarp(IntegerParam):
 
 
 class MaxRegs(IntegerParam):
-    values = [32, 48, 64, 80, 96]
+    values = [32, 64, 96]
     default_value = 64
 
 
