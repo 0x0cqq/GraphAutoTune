@@ -1,5 +1,6 @@
 import json
 import logging
+import multiprocessing as mp
 import os
 from typing import List, Type
 
@@ -52,23 +53,37 @@ class Driver:
         os.chdir(build_path)
 
         config.export()
-        logger.info(f"Compile with config hash {config_hash}")
+        logger.info(f"Compile with config hash {config_hash}, config: {config}")
 
         cmake_command = "cmake " + definitions + " " + str(PROJECT_PATH)
-        logger.info(
-            f"Generating makefile with CMake: {cmake_command} for config {config}"
-        )
+        logger.info(f"Generating makefile with CMake...")
         # without stdout
         ret_code = os.system(cmake_command + f" > {build_path / 'cmake.log'} 2>&1")
 
-        assert ret_code == 0, f"CMake exited with non-zero code {ret_code}"
+        assert (
+            ret_code == 0
+        ), f"CMake exited with non-zero code {ret_code} when compile {config_hash}"
 
         make_command = "make -j"
-        logger.info(f"Compiling with Make: {make_command} for config {config}")
+        logger.info(f"Compiling with Make...")
         ret_code = os.system(make_command + f" > {build_path / 'make.log'} 2>&1")
-        assert ret_code == 0, f"Make exited with non-zero code {ret_code}"
+        assert (
+            ret_code == 0
+        ), f"Make exited with non-zero code {ret_code} when compile {config_hash}"
 
         logger.debug("Compilation finished")
+
+    def batch_run(self, configs: List[ConfigClass]) -> List[float]:
+        """批量运行程序
+
+        Args:
+            configs (List[Config]): 配置列表
+
+        Returns:
+            List[float]: 时间列表
+        """
+
+        return [self.run(config) for config in configs]
 
     def run(self, config: ConfigClass) -> float:
         """
@@ -93,7 +108,7 @@ class Driver:
         self.compile(config)
         os.chdir(build_path)
 
-        logger.info(f"Running Job: <{self.job}> with options: <{options}>")
+        logger.info(f"Running Job...")
 
         run_command = f"{RUN_COMMAND_PREFIX} ./{self.job} {' '.join(options)}"
         logger.debug(f"Running Command: {run_command}")
@@ -101,7 +116,9 @@ class Driver:
         ret_code = os.system(run_command + f" > {result_path.as_posix()} 2>&1")
 
         if ret_code != 0:
-            logger.warning(f"Graph mining program returned non-zero code {ret_code}")
+            logger.warning(
+                f"Graph mining program returned non-zero code {ret_code} while running {config_hash}"
+            )
             return FLOAT_INF
 
         with open(get_time_path(config_hash).as_posix(), "r") as f:

@@ -143,8 +143,11 @@ class Manipulator:
         """
         valid_trials = []
         results = []
-        for trial in trials:
-            time_cost = self.driver.run(trial)
+
+        # batchize 的编译，多进程编译
+
+        time_costs = self.driver.batch_run(trials)
+        for trial, time_cost in zip(trials, time_costs):
             if time_cost != FLOAT_INF:
                 valid_trials.append(trial)
                 results.append(time_cost)

@@ -14,7 +14,7 @@ class SetSearchType(IntegerParam):
 
 
 class SetIntersectionType(EnumParam):
-    values = ["Parallel", "Serial"]
+    values = ["Parallel"]
     default_value = "Parallel"
 
 
