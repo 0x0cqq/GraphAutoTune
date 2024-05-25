@@ -18,7 +18,7 @@ class Tuner:
         self.best_time = FLOAT_INF
         self.max_round = 10
         self.batch_size = 3
-        self.warmup_examples = 3
+        self.warmup_examples = 10
 
     def _warmup(self, warmup_examples: int) -> None:
         random_samples = self.manipulator.random_batch(warmup_examples)
@@ -43,12 +43,12 @@ class Tuner:
             # send to manipulator
             self.manipulator.update_model(valid_trials, results)
 
+            best_config = self.manipulator.get_best_config()
             logger.info(
-                f"Round {round_id + 1} / {self.max_round}, best performance: {self.manipulator.best_config[1]:.2f}s",
+                f"Round {round_id + 1} / {self.max_round}, best performance: {best_config[1]:.2f}s",
             )
 
-        logger.info(
-            f"End tuning... best performance: {self.manipulator.best_config[1]:.2f}s"
-        )
+        best_config = self.manipulator.get_best_config()
+        logger.info(f"End tuning... best performance: {best_config[1]:.2f}s")
 
         return self.manipulator.best_config

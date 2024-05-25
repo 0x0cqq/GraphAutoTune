@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from typing import List, Type
+from typing import List, Tuple, Type
 
 import numpy as np
 import xgboost as xgb
@@ -26,6 +26,8 @@ class Modeling:
     """
 
     xgb_params = {
+        # "tree_method": "gpu_hist",
+        # "predictor": "gpu_predictor",
         "max_depth": 10,
         "gamma": 0.001,
         "min_child_weight": 0,
@@ -99,6 +101,17 @@ class Modeling:
                 f"XGBoost train: {end - start: .2f} s \t object count: {object_count}"
             )
 
+    def is_config_exist(self, data_x: ConfigClass) -> bool:
+        """判断一个配置是否已经在历史数据中
+
+        Args:
+            data_x (ConfigClass): 参数空间中的点
+
+        Returns:
+            bool: 是否存在
+        """
+        return data_x.fingerprint() in [x.fingerprint() for x in self.xs]
+
     def predict_list(self, data_x: List[ConfigClass]) -> List[float]:
         """预测一组数据的运行时间
 
@@ -110,6 +123,7 @@ class Modeling:
         """
         matrix_x = [item.get_list() for item in data_x]
         dtest = xgb.DMatrix(np.asanyarray(matrix_x))
+        assert self.bst is not None, "Model is not trained yet."
         return self.bst.predict(dtest)
 
     def predict(self, data_x: ConfigClass) -> float:
@@ -134,3 +148,15 @@ class Modeling:
         self.ys.extend(new_ys)
         self.__dump()
         self.__fit()
+
+    def get_best_config(self) -> Tuple[ConfigClass, float]:
+        """获取历史数据中最好的配置
+
+        Returns:
+            Tuple[ConfigClass, float]: 最好的配置和对应的运行时间
+        """
+        if len(self.xs) == 0:
+            return self.config_class(), FLOAT_INF
+
+        best_index = np.argmin(self.ys)
+        return self.xs[best_index], self.ys[best_index]

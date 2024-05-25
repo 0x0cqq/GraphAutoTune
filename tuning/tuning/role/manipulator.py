@@ -26,8 +26,6 @@ class Manipulator:
         self.model = model
         self.driver = driver
         self.config_space = ConfigSpace(model.config_class)
-        self.best_config = (None, FLOAT_INF)
-        self.batch_size = 10
 
     def update_model(self, inputs: List[ConfigClass], results: List[float]) -> None:
         """添加若干的结果到代价模型中
@@ -151,3 +149,11 @@ class Manipulator:
                 valid_trials.append(trial)
                 results.append(time_cost)
         return valid_trials, results
+
+    def get_best_config(self) -> Tuple[ConfigClass, float]:
+        """获取历史数据中最好的配置
+
+        Returns:
+            Tuple[ConfigClass, float]: 最好的配置和对应的运行时间
+        """
+        return self.model.get_best_config()
