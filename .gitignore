@@ -1,5 +1,6 @@
 # CMake build directory
 build/
+data/
 build_tuning/
 tuning_results/
 
