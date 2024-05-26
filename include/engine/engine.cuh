@@ -73,7 +73,6 @@ class Executor {
         gpuErrchk(cudaMemGetInfo(&free, &total));
         size_t max_units = free / (MAX_PREFIXS * (set_size * sizeof(VIndex_t) +
                                                   50 * 8));  // 20 * 8 bytes
-        std::cerr << "Max Units: " << max_units << std::endl;
 
         for (int i = 0; i < MAX_PREFIXS; i++) {
             prefix_storages[i].init(max_units, set_size);
