@@ -162,7 +162,7 @@ __device__ VIndex_t do_intersection_parallel(
     const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
     VIndex_t* __restrict__ out, const VIndex_t* __restrict__ a,
     const VIndex_t* __restrict__ b, VIndex_t na, VIndex_t nb) {
-        constexpr auto launch_config = config.engine_config.launch_config;
+    constexpr auto launch_config = config.engine_config.launch_config;
     constexpr int warps_per_block =
         launch_config.threads_per_block / launch_config.threads_per_warp;
 
@@ -189,6 +189,7 @@ __device__ VIndex_t do_intersection_parallel(
 
         const int offset = cg::inclusive_scan(warp, found);
 
+        warp.sync();
         __threadfence_block();
         if (found) out[out_size + offset - 1] = u;
         if (lid == WarpSize - 1) out_size += offset;
@@ -267,6 +268,7 @@ inline __device__ VIndex_t do_intersection_parallel_size(
         }
         out_size += found;
     }
+    warp.sync();
     VIndex_t aggregate = cg::reduce(warp, out_size, cg::plus<VIndex_t>());
     // only available in lid == 0
     return aggregate;
@@ -306,8 +308,11 @@ __device__ void ArrayVertexSet<config>::intersect_size(
     const ArrayVertexSet<config>& a, const ArrayVertexSet<config>& b,
     const Core::UnorderedVertexSet<SIZE>& set) {
     // 一个低成本的计算交集大小的function
-    this->_size = do_intersection_dispatcher_size<config, depth>(
+    VIndex_t size = do_intersection_dispatcher_size<config, depth>(
         warp, a.data(), b.data(), a.size(), b.size(), set);
+    if (warp.thread_rank() == 0) {
+        this->_size = size;
+    }
 }
 
 template <Config config>
@@ -316,6 +321,7 @@ __device__ VIndex_t ArrayVertexSet<config>::subtraction_size_onethread(
     const Core::UnorderedVertexSet<SIZE>& set) {
     // 这是只有一个线程的 version
     int ans = 0;
+#pragma unroll
     for (int i = 0; i < depth; i++) {
         if (search_dispatcher<config>(set.get(i), _data, _size)) {
             ans++;

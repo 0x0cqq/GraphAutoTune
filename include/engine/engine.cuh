@@ -32,7 +32,7 @@ class Executor {
     VertexStorages<config> vertex_storages;
 
     // 用于 IEP 的临时存储
-    unsigned long long *d_ans;
+    long long *d_ans;
 
     // 用于 cub device prefix 的空间
     void *d_prefix_temp_storage = nullptr;
@@ -72,7 +72,7 @@ class Executor {
         size_t free, total;
         gpuErrchk(cudaMemGetInfo(&free, &total));
         size_t max_units = free / (MAX_PREFIXS * (set_size * sizeof(VIndex_t) +
-                                                  20 * 8));  // 20 * 8 bytes
+                                                  50 * 8));  // 20 * 8 bytes
         std::cerr << "Max Units: " << max_units << std::endl;
 
         for (int i = 0; i < MAX_PREFIXS; i++) {
@@ -86,9 +86,9 @@ class Executor {
         }
 
         // 分配答案空间
-        gpuErrchk(cudaMalloc(&d_ans, sizeof(unsigned long long) * max_units));
+        gpuErrchk(cudaMalloc(&d_ans, sizeof(long long) * max_units));
         // 设备空间设置为 0
-        gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * max_units));
+        gpuErrchk(cudaMemset(d_ans, 0, sizeof(long long) * max_units));
 
         // 准备前缀和空间
         VIndex_t *temp = nullptr;
@@ -121,17 +121,17 @@ class Executor {
     }
 
     // 通过 thrust::reduce 求和所有的 Unit 的 d_ans
-    __host__ unsigned long long reduce_answer(VIndex_t units) {
-        thrust::device_ptr<unsigned long long> ans_ptr(d_ans);
+    __host__ long long reduce_answer(VIndex_t units) {
+        thrust::device_ptr<long long> ans_ptr(d_ans);
         return thrust::reduce(ans_ptr, ans_ptr + units);
     }
 
-    __host__ unsigned long long perform_search(DeviceContext<config> &context);
+    __host__ long long perform_search(DeviceContext<config> &context);
 };
 
 // 这个函数约等于从 V 全集的只有一个 Unit 开始的 Extend，并且开启后面的搜索
 template <Config config>
-__host__ unsigned long long Executor<config>::perform_search(
+__host__ long long Executor<config>::perform_search(
     DeviceContext<config> &context) {
     // 把 Context 到当前的 Executor
     this->set_context(context);
@@ -141,7 +141,7 @@ __host__ unsigned long long Executor<config>::perform_search(
 
     // 设备空间设置为0
     // 按理说这个应该放到外面。但总共也就一次，所以就放在这里了
-    gpuErrchk(cudaMemset(d_ans, 0, sizeof(unsigned long long) * num_units));
+    gpuErrchk(cudaMemset(d_ans, 0, sizeof(long long) * num_units));
 
     VIndex_t v_cnt = device_context->graph_backend.v_cnt();
     for (VIndex_t base_index = 0; base_index < v_cnt; base_index += num_units) {
@@ -272,8 +272,9 @@ __host__ void Executor<config>::extend(int base_extend_unit_id,
 #ifndef NDEBUG
     auto time_start = std::chrono::high_resolution_clock::now();
     if (cur_pattern_vid < LOG_DEPTH) {
-        std::cout << "Level " << cur_pattern_vid << ": enter host extend"
-                  << std::endl;
+        std::cout << "Level " << cur_pattern_vid << ": enter host extend from "
+                  << base_extend_unit_id << " to "
+                  << base_extend_unit_id + num_extend_units << std::endl;
     }
 #endif
 

@@ -13,7 +13,7 @@
 #include "generated/default_config.hpp"
 
 void output_result_files(std::string hash_code, double duration,
-                         unsigned long long total_count) {
+                         long long total_count) {
     // 创建文件夹
     if (!std::filesystem::exists(RESULTS_DIR)) {
         std::filesystem::create_directory(RESULTS_DIR);
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     auto time_start = std::chrono::high_resolution_clock::now();
 
     nvtxRangePush("Search");
-    unsigned long long ans = engine.perform_search(context);
+    long long ans = engine.perform_search(context);
     nvtxRangePop();
 
     auto time_end = std::chrono::high_resolution_clock::now();
@@ -102,9 +102,9 @@ int main(int argc, char* argv[]) {
 
     // 4. 输出结果
 
-    unsigned long long total_count = 0;
-    gpuErrchk(cudaMemcpyFromSymbol(&total_count, GPU::counter,
-                                   sizeof(unsigned long long)));
+    long long total_count = 0;
+    gpuErrchk(
+        cudaMemcpyFromSymbol(&total_count, GPU::counter, sizeof(long long)));
 
     std::cout << "(Total Intersection Count: " << total_count << ")"
               << std::endl;

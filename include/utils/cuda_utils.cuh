@@ -59,13 +59,15 @@ void print_device_memory() {
 template <typename T>
 __device__ int lower_bound(const T *loop_data_ptr, int loop_size,
                            T min_vertex) {
+    if (loop_size == 0 || loop_data_ptr[loop_size - 1] < min_vertex)
+        return loop_size;
     int l = 0, r = loop_size - 1;
-    while (l <= r) {
-        int mid = r - ((r - l) >> 1);
+    while (l < r) {
+        int mid = (l + r) >> 1;
         if (loop_data_ptr[mid] < min_vertex)
             l = mid + 1;
         else
-            r = mid - 1;
+            r = mid;
     }
     return l;
 }
@@ -73,6 +75,6 @@ __device__ int lower_bound(const T *loop_data_ptr, int loop_size,
 template <typename T>
 __device__ void swap(T &a, T &b) {
     T tmp = a;
-    a = b;
+    a = b; 
     b = tmp;
 }

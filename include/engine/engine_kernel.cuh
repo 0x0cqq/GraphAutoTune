@@ -295,6 +295,12 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
     const int bid = blockIdx.x, tid = threadIdx.x;
     const int global_tid = bid * blockDim.x + tid;
     const int num_threads = gridDim.x * blockDim.x;
+
+    int restrict_index_start =
+        context.schedule_data.restrictions_start[cur_pattern_vid + 1];
+    int restrict_index_end =
+        context.schedule_data.restrictions_start[cur_pattern_vid + 2];
+
     // 对于每一个本层的 Unit
     // 构建 loop_set_unit 的 size
     for (int base = 0; base < num_units; base += num_threads) {
@@ -309,10 +315,6 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
         // 在这里第一次 apply 限制
         // 不是写 size，而是写比 min_vertex 小的点的个数。
         // 遍历所有和 cur_pattern_vid 相关的限制。
-        int restrict_index_start =
-            context.schedule_data.restrictions_start[cur_pattern_vid + 1];
-        int restrict_index_end =
-            context.schedule_data.restrictions_start[cur_pattern_vid + 2];
         VIndex_t min_vertex = context.graph_backend.v_cnt();
         for (int i = restrict_index_start; i < restrict_index_end; i++) {
             int restrict_target = context.schedule_data.restrictions[i];
@@ -327,15 +329,19 @@ __global__ void prepare_v_storage_kernel(const DeviceContext<config> context,
             lower_bound(p_storage.vertex_set[loop_set_uid].data(),
                         p_storage.vertex_set[loop_set_uid].size(), min_vertex);
         v_storage.unit_extend_size[uid] = size_after_restrict;
+        // v_storage.unit_extend_size[uid] =
+        //     p_storage.vertex_set[loop_set_uid].size();
     }
 }
+
+constexpr int UID = 2;
 
 // 按照 IEP Info 的提示去计算出每一个 Unit 对应的答案，放到某个数组里面
 template <Config config, int cur_pattern_vid>
 __global__ void get_iep_answer_kernel(DeviceContext<config> context,
                                       PrefixStorages<config> p_storages,
                                       VertexStorage<config> last_v_storage,
-                                      unsigned long long *d_ans) {
+                                      long long *d_ans) {
     // per-thread 去处理 Unit
     const int thread_id = threadIdx.x, block_id = blockIdx.x;
     const int global_tid = block_id * blockDim.x + thread_id;
@@ -348,12 +354,20 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
     int iep_prefix_num = iep_data.iep_prefix_num,
         subgroups_num = iep_data.subgroups_num;
 
-    unsigned long long ans[MAX_PREFIXS];
+    long long ans[MAX_PREFIXS];
 
     for (int base = 0; base < num_units; base += num_threads) {
         int uid = base + global_tid;
         if (uid >= num_units) continue;
-        unsigned long long local_ans = 0;
+        long long local_ans = 0;
+        // if (uid == UID) {
+        //     // subtraction_set
+        //     printf("uid: %d subtraction_set: ", uid);
+        //     for (int i = 0; i < cur_pattern_vid + 1; i++) {
+        //         printf("%d ", last_v_storage.subtraction_set[uid].get(i));
+        //     }
+        //     printf("\n");
+        // }
         for (int prefix_id_x = 0; prefix_id_x < iep_prefix_num; prefix_id_x++) {
             int this_prefix_id = iep_data.iep_vertex_id[prefix_id_x];
             // 需要获得 prefix_id 的 uid
@@ -365,14 +379,36 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
                 ans[prefix_id_x] = vs.size();
             } else {
                 ans[prefix_id_x] =
-                    vs.subtraction_size_onethread<cur_pattern_vid>(
+                    vs.subtraction_size_onethread<cur_pattern_vid + 1>(
                         last_v_storage.subtraction_set[uid]);
             }
-        }
 
-        unsigned long long val = 1;
+            // if (uid == UID) {
+            //     // subtraction_set
+            //     printf("uid: %d prefix_id: %d father_uid: %d size: %d\n",
+            //     uid,
+            //            this_prefix_id, father_uid, vs.size());
+            //     for (int i = 0; i < vs.size(); i++) {
+            //         printf("%d ", vs.get(i));
+            //     }
+            //     printf("\n");
+            // }
+        }
+        // for (int i = 0; i < iep_prefix_num; i++) {
+        //     printf("uid: %d prefix_id: %d ans: %lld size_only: %d\n",
+        //     uid, i,
+        //            ans[i],
+        //            context.schedule_data
+        //                .prefixs_size_only[iep_data.iep_vertex_id[i]]);
+        // }
+
+        long long val = 1;
         int last_gid = -1;
         for (int gid = 0; gid < subgroups_num; gid++) {
+            // if (uid == UID) {
+            //     printf("gid: %d ans: %lld\n", gid,
+            //            ans[iep_data.iep_ans_pos[gid]]);
+            // }
             if (gid == last_gid + 1) {
                 val = ans[iep_data.iep_ans_pos[gid]];
             } else {
@@ -381,8 +417,13 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
             if (iep_data.iep_flag[gid]) {
                 last_gid = gid;
                 local_ans += val * iep_data.iep_coef[gid];
+                // if (uid == UID) {
+                //     printf("uid: %d gid: %d val: %lld coef: %d\n", uid, gid,
+                //            val, iep_data.iep_coef[gid]);
+                // }
             }
         }
+        // printf("uid: %d local_ans: %lld\n", uid, local_ans);
         d_ans[uid] += local_ans;
     }
 }
@@ -451,8 +492,7 @@ void extend_p_storage(DeviceContext<config> &context,
 template <Config config, int cur_pattern_vid>
 void get_iep_answer(DeviceContext<config> &context,
                     PrefixStorages<config> &prefix_storages,
-                    VertexStorages<config> &vertex_storages,
-                    unsigned long long *d_ans) {
+                    VertexStorages<config> &vertex_storages, long long *d_ans) {
     const auto &last_v_storage = vertex_storages[cur_pattern_vid];
 
     constexpr auto launch_config = config.engine_config.launch_config;

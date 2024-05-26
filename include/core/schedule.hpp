@@ -768,7 +768,8 @@ class Schedule {
             std::cout << "\t";
             prefixs[i].output(i, prefixs_father[i], prefixs_size_only[i]);
         }
-        std::cout << "Restrictions start: ";
+        std::cout << "Restrictions start: (" << restrictions_start.size()
+                  << ")";
         assert(restrictions_start.size() == basic_vertexes);
         for (int i = 0; i < basic_vertexes; i++) {
             std::cout << restrictions_start[i] << " ";
@@ -834,9 +835,12 @@ class Schedule {
         int current_start = 0;
         for (int i = 0; i < basic_vertexes; i++) {
             while (current_start < basic_vertexes &&
-                   restrictions[current_start].second < i) {
+                   this->restrictions[current_start].second < i) {
                 current_start++;
             }
+            std::cout << "Current start: " << current_start << std::endl;
+            std::cout << "second: " << this->restrictions[current_start].second
+                      << std::endl;
             restrictions_start.push_back(current_start);
         }
     }
