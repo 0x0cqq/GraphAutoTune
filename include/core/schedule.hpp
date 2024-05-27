@@ -959,7 +959,7 @@ class Schedule {
 };
 
 struct IEPData {
-    static int MAX_IEP_GROUPS = 50;
+    constexpr static int MAX_IEP_GROUPS = 50;
     int iep_prefix_num;
     int subgroups_num;
     int iep_vertex_id[MAX_PREFIXS];
