@@ -19,9 +19,9 @@ class Prefix {
     VIndex_t data[MAX_VERTEXES];  // Prefix 的内容
     int depth;                    // Prefix 拥有的长度
 
-    constexpr Prefix() : depth(0) {}
+    Prefix() : depth(0) {}
 
-    constexpr Prefix(const std::vector<VIndex_t> &_data) {
+    Prefix(const std::vector<VIndex_t> &_data) {
         assert(_data.size() <= MAX_VERTEXES);
         depth = _data.size();
         for (int i = 0; i < depth; i++) {
@@ -29,14 +29,14 @@ class Prefix {
         }
     }
 
-    constexpr bool operator==(const Prefix &other) const {
+    bool operator==(const Prefix &other) const {
         if (depth != other.depth) {
             return false;
         }
         return std::equal(data, data + depth, other.data);
     }
 
-    constexpr bool operator==(const std::vector<VIndex_t> &other) const {
+    bool operator==(const std::vector<VIndex_t> &other) const {
         if (depth != other.size()) {
             return false;
         }
@@ -63,7 +63,7 @@ using PermutationGroup = std::vector<std::vector<int>>;
 using Restrictions = std::vector<std::pair<int, int>>;
 using Pairs = std::vector<std::pair<int, int>>;
 
-constexpr int get_iep_suffix_vertexes(const Pattern &p) {
+int get_iep_suffix_vertexes(const Pattern &p) {
     // 最后的若干个节点，他们没有相互的依赖。
     // 只需要检验最靠前的节点和后面的所有的节点没有相互的依赖
     for (int k = 2; k <= p.v_cnt() - 2; k++) {
@@ -83,7 +83,7 @@ constexpr int get_iep_suffix_vertexes(const Pattern &p) {
 };
 
 // s 是邻接矩阵，但是去重，去掉自环，bit 长度为 n * (n - 1) / 2
-constexpr bool is_connected(int s, int n) {
+bool is_connected(int s, int n) {
     // 枚举所有子图
     std::vector<bool> connected(n * n, false);
     // 连接所有的边
@@ -123,7 +123,7 @@ constexpr bool is_connected(int s, int n) {
 
 // 需要一个在完全图中的 naive match 来检测 restriction 的有效性
 // restriction = (x, y) 代表 v_x < v_y 必须得到满足。
-constexpr int naive_match_in_full_graph(
+int naive_match_in_full_graph(
     const Pattern &p, const std::vector<std::pair<int, int>> &restrictions) {
     if (p.v_cnt() >= 10) {
         std::cout
@@ -146,7 +146,7 @@ constexpr int naive_match_in_full_graph(
 }
 
 // 计算 n 个点的联通图，边数为 偶数/奇数 的数量
-constexpr std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
+std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
     assert(k * (k - 1) / 2 < 32);  // avoid too many edges
     std::vector<std::pair<int, int>> graph_cnt(k + 1);
 
@@ -170,7 +170,7 @@ constexpr std::vector<std::pair<int, int>> calculate_graph_cnt(const int k) {
 };
 
 // 获取所有让 p 的自同构的 permutation
-constexpr std::vector<Permutation> get_isomorphism_perm(const Pattern &p) {
+std::vector<Permutation> get_isomorphism_perm(const Pattern &p) {
     std::vector<Permutation> ans{};
     Permutation perm{};
     for (int i = 0; i < p.v_cnt(); i++) {
@@ -186,7 +186,7 @@ constexpr std::vector<Permutation> get_isomorphism_perm(const Pattern &p) {
     return ans;
 }
 
-constexpr int get_isomorphism_multiplicity(const Pattern &p) {
+int get_isomorphism_multiplicity(const Pattern &p) {
     return get_isomorphism_perm(p).size();
 }
 
@@ -443,7 +443,7 @@ struct IEPInfo {
     std::vector<int> iep_coef;       // subgroup -> coef: int -> int
     std::vector<bool> iep_flag;      // subgroup -> flag: int -> bool
 
-    constexpr void permute(const std::vector<int> &permutation) {
+    void permute(const std::vector<int> &permutation) {
         // 只有 iep_vertex_id 和 vertex id 有关系
         for (int i = 0; i < iep_vertex_id.size(); i++) {
             int origin_prefix_id = iep_vertex_id[i];
@@ -523,10 +523,9 @@ struct IEPHelperInfo {
     }
 };
 
-constexpr void get_iep_groups(
-    int depth, std::vector<int> &id, int group_cnt, int iep_suffix_vertexes,
-    std::vector<IEPGroup> &groups,
-    const std::vector<std::pair<int, int>> &graph_cnt) {
+void get_iep_groups(int depth, std::vector<int> &id, int group_cnt,
+                    int iep_suffix_vertexes, std::vector<IEPGroup> &groups,
+                    const std::vector<std::pair<int, int>> &graph_cnt) {
     // 边界
     if (depth == iep_suffix_vertexes) {
         std::vector<int> group_size(group_cnt, 0);
@@ -573,7 +572,7 @@ constexpr void get_iep_groups(
 }
 
 // 计算 IEP 所需要的系数的信息
-constexpr IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
+IEPHelperInfo generate_iep_helper_info(const Pattern &p) {
     int iep_suffix_vertexes = get_iep_suffix_vertexes(p);
 
     // 单个连通块的情况
@@ -612,7 +611,7 @@ class Schedule {
     // 和 IEP 有关的信息
     IEPInfo iep_info;
 
-    constexpr void sort_prefixs() {
+    void sort_prefixs() {
         std::vector<int> permutation(prefixs.size());
         std::generate(permutation.begin(), permutation.end(),
                       [i = 0]() mutable { return i++; });
@@ -960,14 +959,14 @@ class Schedule {
 };
 
 struct IEPData {
-    static constexpr int MAX_IEP_GROUPS = 50;
+    static int MAX_IEP_GROUPS = 50;
     int iep_prefix_num;
     int subgroups_num;
     int iep_vertex_id[MAX_PREFIXS];
     int iep_ans_pos[MAX_IEP_GROUPS];
     int iep_coef[MAX_IEP_GROUPS];
     bool iep_flag[MAX_IEP_GROUPS];
-    constexpr IEPData(const IEPInfo &info) {
+    IEPData(const IEPInfo &info) {
         iep_prefix_num = info.iep_vertex_id.size();
         subgroups_num = info.iep_ans_pos.size();
         for (int i = 0; i < iep_prefix_num; i++) {
@@ -995,7 +994,7 @@ struct ScheduleData {
     int restrictions_start[MAX_VERTEXES + 1];  // 这里要包括最后一个
     int restrictions[MAX_VERTEXES * MAX_VERTEXES];
     IEPData iep_data;
-    constexpr ScheduleData(const Schedule &schedule)
+    ScheduleData(const Schedule &schedule)
         : basic_vertexes(schedule.basic_vertexes),
           total_prefix_num(schedule.prefixs.size()),
           iep_suffix_vertexes(schedule.iep_suffix_vertexes),
@@ -1021,7 +1020,7 @@ struct ScheduleData {
         }
         restrictions_start[basic_vertexes] = schedule.restrictions.size();
     }
-    constexpr void to_device() const {
+    void to_device() const {
         // do nothing here. no pointer
     }
 };
