@@ -69,9 +69,6 @@ void extend_p_storage(DeviceContext<config> &context,
                       PrefixStorages<config> &prefix_storages,
                       VertexStorages<config> &vertex_storages,
                       int num_extend_units) {
-    if constexpr (is_tuning) {
-        counter++;
-    }
     const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
     const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
 
@@ -83,9 +80,6 @@ void extend_p_storage(DeviceContext<config> &context,
         <<<num_blocks, threads_per_block>>>(context, prefix_storages,
                                             cur_v_storage, next_v_storage,
                                             num_extend_units);
-    if (is_tuning && counter == 100) {
-        gpuErrchk(cudaDeviceSynchronize());
-    }
 }
 
 template <Config config, int cur_pattern_vid>
