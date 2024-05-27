@@ -238,7 +238,6 @@ __global__ void __maxnreg__(config.engine_config.launch_config.max_regs)
 
         bool ap = cur_subtraction_set.has_data<cur_pattern_vid + 1>(warp, v);
         // 构建所有 prefix 对应的 p_storage
-#pragma unroll
         for (int cur_prefix_id = start_prefix_id; cur_prefix_id < end_prefix_id;
              cur_prefix_id++) {
             int index = cur_prefix_id - start_prefix_id;

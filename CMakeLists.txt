@@ -42,9 +42,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-restrict")
 include_directories(include)
 
 if(ENABLE_TEST)
-
-# Fetch Catch2 for testing
-message(STATUS "Fetching Catch2...")
+  # Fetch Catch2 for testing
+  message(STATUS "Fetching Catch2...")
   Include(FetchContent)
   FetchContent_Declare(
     Catch2
@@ -66,7 +65,9 @@ endif()
 add_subdirectory(target)
 
 # Utils: transform graph e.g.
-add_subdirectory(utils)
+if(ENABLE_UTILS)
+  add_subdirectory(utils)
+endif()
 
 # message the current parameters
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
