@@ -2,12 +2,16 @@
 
 #include <cooperative_groups.h>
 
+#include "consts/project_consts.hpp"
 #include "engine/context.cuh"
 #include "engine/storage.cuh"
+#include "utils/utils.hpp"
 
 namespace cg = cooperative_groups;
 
 namespace Engine {
+
+int counter = 0;
 
 // 这个 Kernel 是一个一个遍历所有的点，然后构建第一层的 Storage
 // 是否可以把这个地方的 遍历 Vertex Set 抽象成遍历一个
@@ -425,106 +429,6 @@ __global__ void get_iep_answer_kernel(DeviceContext<config> context,
         // printf("uid: %d local_ans: %lld\n", uid, local_ans);
         d_ans[uid] += local_ans;
     }
-}
-
-// plugin for kernels
-template <Config config, int cur_pattern_vid>
-void prepare_v_storage(DeviceContext<config> &context,
-                       PrefixStorages<config> &prefix_storages,
-                       VertexStorages<config> &vertex_storages) {
-    const auto &v_storage = vertex_storages[cur_pattern_vid];
-
-    int loop_set_prefix_id =
-        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
-    const auto &p_storage = prefix_storages[loop_set_prefix_id];
-
-    constexpr auto launch_config = config.engine_config.launch_config;
-    constexpr int num_blocks = launch_config.num_blocks;
-    constexpr int threads_per_block = launch_config.threads_per_block;
-
-    prepare_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, threads_per_block>>>(context, p_storage, v_storage,
-                                            loop_set_prefix_id);
-}
-
-template <Config config, int cur_pattern_vid>
-void extend_v_storage(const DeviceContext<config> context,
-                      PrefixStorages<config> p_storages,
-                      VertexStorages<config> v_storages,
-                      int base_extend_unit_id, int num_extend_units) {
-    const auto &cur_v_storage = v_storages[cur_pattern_vid];
-    const auto &next_v_storage = v_storages[cur_pattern_vid + 1];
-
-    // 下一个点的 loop_set_prefix_id
-    const int loop_set_prefix_id =
-        context.schedule_data.loop_set_prefix_id[cur_pattern_vid + 1];
-    const auto &loop_set_storage = p_storages[loop_set_prefix_id];
-
-    constexpr auto launch_config = config.engine_config.launch_config;
-    constexpr int num_blocks = launch_config.num_blocks;
-    constexpr int threads_per_block = launch_config.threads_per_block;
-
-    extend_v_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, threads_per_block>>>(
-            context, loop_set_storage, loop_set_prefix_id, cur_v_storage,
-            next_v_storage, base_extend_unit_id, num_extend_units);
-}
-
-template <Config config, int cur_pattern_vid>
-void extend_p_storage(DeviceContext<config> &context,
-                      PrefixStorages<config> &prefix_storages,
-                      VertexStorages<config> &vertex_storages,
-                      int num_extend_units) {
-    const auto &cur_v_storage = vertex_storages[cur_pattern_vid];
-    const auto &next_v_storage = vertex_storages[cur_pattern_vid + 1];
-
-    constexpr auto launch_config = config.engine_config.launch_config;
-    constexpr int num_blocks = launch_config.num_blocks;
-    constexpr int threads_per_block = launch_config.threads_per_block;
-
-    extend_p_storage_kernel<config, cur_pattern_vid>
-        <<<num_blocks, threads_per_block>>>(context, prefix_storages,
-                                            cur_v_storage, next_v_storage,
-                                            num_extend_units);
-}
-
-template <Config config, int cur_pattern_vid>
-void get_iep_answer(DeviceContext<config> &context,
-                    PrefixStorages<config> &prefix_storages,
-                    VertexStorages<config> &vertex_storages, long long *d_ans) {
-    const auto &last_v_storage = vertex_storages[cur_pattern_vid];
-
-    constexpr auto launch_config = config.engine_config.launch_config;
-    constexpr int num_blocks = launch_config.num_blocks;
-    constexpr int threads_per_block = launch_config.threads_per_block;
-
-    get_iep_answer_kernel<config, cur_pattern_vid>
-        <<<num_blocks, threads_per_block>>>(context, prefix_storages,
-                                            last_v_storage, d_ans);
-}
-
-template <Config config>
-void set_vertex_set_space(const PrefixStorage<config> &p_storage, int num_units,
-                          int set_size) {
-    constexpr auto launch_config = config.engine_config.launch_config;
-    constexpr int num_blocks = launch_config.num_blocks;
-    constexpr int threads_per_block = launch_config.threads_per_block;
-
-    set_vertex_set_space_kernel<config>
-        <<<num_blocks, threads_per_block>>>(p_storage, num_units, set_size);
-}
-
-template <Config config>
-void first_extend(DeviceContext<config> &context,
-                  const PrefixStorage<config> &p_storage,
-                  const VertexStorage<config> &v_storage, VIndex_t start_vid,
-                  VIndex_t end_vid) {
-    constexpr auto launch_config = config.engine_config.launch_config;
-    constexpr int num_blocks = launch_config.num_blocks;
-    constexpr int threads_per_block = launch_config.threads_per_block;
-
-    first_extend_kernel<config><<<num_blocks, threads_per_block>>>(
-        context, p_storage, v_storage, start_vid, end_vid);
 }
 
 }  // namespace Engine

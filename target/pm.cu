@@ -1,6 +1,4 @@
 // 在 GPU 上进行 Pattern Matching.
-#include <nvtx3/nvToolsExt.h>
-
 #include <algorithm>
 
 #include "consts/project_consts.hpp"
@@ -8,35 +6,10 @@
 #include "engine/engine.cuh"
 #include "infra/graph_backend.cuh"
 #include "utils/cuda_utils.cuh"
+#include "utils/utils.hpp"
 
 // generated config
 #include "generated/default_config.hpp"
-
-void output_result_files(std::string hash_code, double duration,
-                         long long total_count) {
-    // 创建文件夹
-    if (!std::filesystem::exists(RESULTS_DIR)) {
-        std::filesystem::create_directory(RESULTS_DIR);
-    }
-    if (!std::filesystem::exists(RESULTS_DIR / hash_code)) {
-        std::filesystem::create_directory(RESULTS_DIR / hash_code);
-    }
-    std::ofstream time_file{RESULTS_DIR / hash_code / TIME_FILE_NAME};
-
-    if (!time_file.is_open()) {
-        throw std::runtime_error("Cannot open the time file");
-    }
-
-    time_file << duration << std::endl;
-
-    std::ofstream count_file{RESULTS_DIR / hash_code / COUNT_FILE_NAME};
-
-    if (!count_file.is_open()) {
-        throw std::runtime_error("Cannot open the time file");
-    }
-
-    count_file << total_count << std::endl;
-}
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
@@ -52,8 +25,7 @@ int main(int argc, char* argv[]) {
     }
     // 模式图
     std::string pattern_str{argv[2]};
-    // std::string_view pattern_str{"0111101111011110"};            // 4-clique
-    // std::string_view pattern_str{"0100110110010110110010100"};   // house
+
     // 标识配置的哈希码
     std::string hash_code = "";
     if (argc > 3) {
@@ -87,9 +59,7 @@ int main(int argc, char* argv[]) {
 
     auto time_start = std::chrono::high_resolution_clock::now();
 
-    nvtxRangePush("Search");
     long long ans = engine.perform_search(context);
-    nvtxRangePop();
 
     auto time_end = std::chrono::high_resolution_clock::now();
 
