@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
+# set(CMAKE_C_COMPILER gcc-12)
+# set(CMAKE_CXX_COMPILER g++-12)
+
 project(GraphAutoTune VERSION 1.0
         DESCRIPTION "Graph AutoTune"
         LANGUAGES CUDA CXX
