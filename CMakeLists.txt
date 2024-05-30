@@ -3,6 +3,16 @@ cmake_minimum_required(VERSION 3.10)
 # set(CMAKE_C_COMPILER gcc-12)
 # set(CMAKE_CXX_COMPILER g++-12)
 
+# C++ and CUDA standard: C++20
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 20)
+
+# CUDA architecture: sm_70
+set(CMAKE_CUDA_ARCHITECTURES 70)
+# CUDA separable compilation
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+
+
 project(GraphAutoTune VERSION 1.0
         DESCRIPTION "Graph AutoTune"
         LANGUAGES CUDA CXX
@@ -18,14 +28,6 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# C++ and CUDA standard: C++20
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 20)
-
-# CUDA architecture: sm_70
-set(CMAKE_CUDA_ARCHITECTURES 70)
-# CUDA separable compilation
-set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
 # Set CXX flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -Wno-sign-compare")
